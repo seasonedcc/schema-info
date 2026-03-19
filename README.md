@@ -94,6 +94,40 @@ schemaInfo(z.array(z.number()))
 // { type: null, optional: false, nullable: false }
 ```
 
+### `schemaFields(schema)`
+
+Extract field metadata from an **object** schema. Takes a schema that defines an object shape and returns a record mapping each field name to its `SchemaInfo`. Automatically unwraps transforms, pipes, refinements, and other wrappers to find the underlying object.
+
+```ts
+schemaFields(schema: unknown): Record<string, SchemaInfo> | null
+```
+
+Returns `null` if the schema is not a recognized object type.
+
+```ts
+import { schemaFields } from 'schema-info'
+import * as z from 'zod'
+
+const fields = schemaFields(z.object({
+  name: z.string(),
+  age: z.number().optional(),
+  role: z.enum(['admin', 'user']),
+}))
+// {
+//   name: { type: 'string', optional: false, nullable: false },
+//   age: { type: 'number', optional: true, nullable: false },
+//   role: { type: 'enum', optional: false, nullable: false, enumValues: ['admin', 'user'] },
+// }
+```
+
+Works with wrapped schemas (transforms, pipes, refinements):
+
+```ts
+const schema = z.object({ name: z.string() }).transform((v) => v)
+schemaFields(schema)
+// { name: { type: 'string', optional: false, nullable: false } }
+```
+
 ## Supported Libraries
 
 | Library | Versions | Detection |
