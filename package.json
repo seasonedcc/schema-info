@@ -31,6 +31,8 @@
     "yup",
     "valibot",
     "arktype",
+    "effect",
+    "joi",
     "validation",
     "typescript"
   ],
