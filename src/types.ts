@@ -6,7 +6,7 @@
  * const t: FieldType = 'string'
  * ```
  */
-type FieldType = 'string' | 'number' | 'boolean' | 'date' | 'datetime' | 'enum'
+type FieldType = 'string' | 'number' | 'boolean' | 'date' | 'enum'
 
 /**
  * Metadata extracted from a schema field by {@link schemaInfo}.
