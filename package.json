@@ -35,6 +35,10 @@
     "typescript"
   ],
   "author": "Daniel Weinmann",
+  "packageManager": "pnpm@10.28.0",
+  "pnpm": {
+    "onlyBuiltDependencies": ["@biomejs/biome", "esbuild"]
+  },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
     "tsup": "^8.3.5",
