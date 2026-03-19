@@ -7,7 +7,7 @@ Extract field metadata (type, optionality, nullability, defaults, enum values) f
 ## Features
 
 - Zero dependencies
-- Supports 7 major schema libraries out of the box
+- Supports 6 schema libraries out of the box
 - Auto-detects which library produced a schema
 - ESM and CommonJS builds
 - Full TypeScript support with exported types
