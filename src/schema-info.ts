@@ -1,3 +1,4 @@
+import { fromValibot, isValibotSchema } from './adapters/valibot'
 import { fromYup, isYupSchema } from './adapters/yup'
 import { fromZod, isZodSchema } from './adapters/zod'
 import type { SchemaInfo } from './types'
@@ -13,6 +14,7 @@ const empty: SchemaInfo = { type: null, optional: false, nullable: false }
  *
  * - **Zod 4+**
  * - **Yup 1.x**
+ * - **Valibot 1.x**
  *
  * @param schema - A schema field from any supported library, or `undefined`
  * @returns Metadata describing the field's type, optionality, nullability,
@@ -31,6 +33,7 @@ function schemaInfo(schema?: unknown): SchemaInfo {
   if (!schema) return empty
   if (isZodSchema(schema)) return fromZod(schema)
   if (isYupSchema(schema)) return fromYup(schema)
+  if (isValibotSchema(schema)) return fromValibot(schema)
   return empty
 }
 

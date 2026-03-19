@@ -1,0 +1,145 @@
+import type { FieldType, SchemaInfo } from '../types'
+
+type ValibotInternalSchema = {
+  kind: 'schema'
+  type: string
+  wrapped?: ValibotInternalSchema
+  default?: unknown
+  options?: unknown[]
+  '~standard'?: { vendor?: string }
+  [key: string]: unknown
+}
+
+function asValibotSchema(schema: unknown): ValibotInternalSchema | null {
+  const candidate = schema as Partial<ValibotInternalSchema>
+  if (candidate?.kind !== 'schema' || typeof candidate?.type !== 'string') {
+    return null
+  }
+
+  const vendor = candidate['~standard']?.vendor
+  if (vendor !== 'valibot') return null
+
+  return candidate as ValibotInternalSchema
+}
+
+/**
+ * Detect whether the given value is a Valibot schema.
+ *
+ * @param schema - Any value to check
+ * @returns `true` when the value is a Valibot v1+ schema instance
+ *
+ * @example
+ * ```ts
+ * import * as v from 'valibot'
+ * isValibotSchema(v.string()) // true
+ * isValibotSchema('hello')    // false
+ * ```
+ */
+function isValibotSchema(schema: unknown): boolean {
+  return asValibotSchema(schema) !== null
+}
+
+const typeMap: Record<string, FieldType> = {
+  string: 'string',
+  number: 'number',
+  boolean: 'boolean',
+  date: 'date',
+}
+
+function extractDefault(
+  schema: ValibotInternalSchema,
+  current?: SchemaInfo['getDefaultValue']
+) {
+  if (schema.default === undefined) return current
+  const raw = schema.default
+  return typeof raw === 'function' ? (raw as () => unknown) : () => raw
+}
+
+/**
+ * Extract {@link SchemaInfo} from a Valibot schema.
+ *
+ * Recursively unwraps wrapper types (`optional`, `nullable`, `nullish`)
+ * to reach the base type. Pipe actions (validations, transforms) are
+ * spread onto the schema object by Valibot, so they are transparent
+ * and require no special handling.
+ *
+ * @param schema - A Valibot schema instance
+ * @param optional - Accumulated optionality from outer wrappers
+ * @param nullable - Accumulated nullability from outer wrappers
+ * @param getDefaultValue - Default value getter from an outer wrapper
+ * @param enumValues - Enum values carried from an outer wrapper
+ * @returns Metadata describing the field's type, optionality, nullability,
+ *   default value and enum values
+ *
+ * @example
+ * ```ts
+ * import * as v from 'valibot'
+ * fromValibot(v.optional(v.string()))
+ * // { type: 'string', optional: true, nullable: false }
+ * ```
+ */
+function fromValibot(
+  schema: unknown,
+  optional = false,
+  nullable = false,
+  getDefaultValue?: SchemaInfo['getDefaultValue'],
+  enumValues?: SchemaInfo['enumValues']
+): SchemaInfo {
+  const vSchema = asValibotSchema(schema)
+
+  if (!vSchema) {
+    return { type: null, optional, nullable, getDefaultValue, enumValues }
+  }
+
+  const { type } = vSchema
+
+  if (type === 'optional') {
+    return fromValibot(
+      vSchema.wrapped,
+      true,
+      nullable,
+      extractDefault(vSchema, getDefaultValue),
+      enumValues
+    )
+  }
+
+  if (type === 'nullable') {
+    return fromValibot(
+      vSchema.wrapped,
+      optional,
+      true,
+      extractDefault(vSchema, getDefaultValue),
+      enumValues
+    )
+  }
+
+  if (type === 'nullish') {
+    return fromValibot(
+      vSchema.wrapped,
+      true,
+      true,
+      extractDefault(vSchema, getDefaultValue),
+      enumValues
+    )
+  }
+
+  if (type === 'picklist' || type === 'enum') {
+    return {
+      type: 'enum',
+      optional,
+      nullable,
+      getDefaultValue,
+      enumValues: (vSchema.options ?? []) as string[],
+    }
+  }
+
+  return {
+    type: typeMap[type] ?? null,
+    optional,
+    nullable,
+    getDefaultValue,
+    enumValues,
+  }
+}
+
+export { isValibotSchema, fromValibot }
