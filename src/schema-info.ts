@@ -1,4 +1,5 @@
 import { fromArkType, isArkTypeSchema } from './adapters/arktype'
+import { fromEffect, isEffectSchema } from './adapters/effect'
 import { fromValibot, isValibotSchema } from './adapters/valibot'
 import { fromYup, isYupSchema } from './adapters/yup'
 import { fromZod, isZodSchema } from './adapters/zod'
@@ -17,6 +18,7 @@ const empty: SchemaInfo = { type: null, optional: false, nullable: false }
  * - **Yup 1.x**
  * - **Valibot 1.x**
  * - **ArkType 2.x**
+ * - **Effect Schema 3.x**
  *
  * @param schema - A schema field from any supported library, or `undefined`
  * @returns Metadata describing the field's type, optionality, nullability,
@@ -37,6 +39,7 @@ function schemaInfo(schema?: unknown): SchemaInfo {
   if (isYupSchema(schema)) return fromYup(schema)
   if (isValibotSchema(schema)) return fromValibot(schema)
   if (isArkTypeSchema(schema)) return fromArkType(schema)
+  if (isEffectSchema(schema)) return fromEffect(schema)
   return empty
 }
 
