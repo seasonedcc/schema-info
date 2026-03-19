@@ -1,0 +1,144 @@
+import Joi from 'joi'
+import { describe, expect, it } from 'vitest'
+import { schemaInfo } from '../schema-info'
+
+describe('schemaInfo with Joi', () => {
+  it('extracts info from string type', () => {
+    expect(schemaInfo(Joi.string().required())).toEqual({
+      type: 'string',
+      optional: false,
+      nullable: false,
+    })
+  })
+
+  it('extracts info from number type', () => {
+    expect(schemaInfo(Joi.number().required())).toEqual({
+      type: 'number',
+      optional: false,
+      nullable: false,
+    })
+  })
+
+  it('extracts info from boolean type', () => {
+    expect(schemaInfo(Joi.boolean().required())).toEqual({
+      type: 'boolean',
+      optional: false,
+      nullable: false,
+    })
+  })
+
+  it('extracts info from date type', () => {
+    expect(schemaInfo(Joi.date().required())).toEqual({
+      type: 'date',
+      optional: false,
+      nullable: false,
+    })
+  })
+
+  it('treats Joi schemas as optional by default', () => {
+    const info = schemaInfo(Joi.string())
+    expect(info.type).toBe('string')
+    expect(info.optional).toBe(true)
+  })
+
+  it('marks required schemas as not optional', () => {
+    const info = schemaInfo(Joi.number().required())
+    expect(info.type).toBe('number')
+    expect(info.optional).toBe(false)
+  })
+
+  it('marks nullable schemas correctly', () => {
+    const info = schemaInfo(Joi.string().required().allow(null))
+    expect(info.type).toBe('string')
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(true)
+  })
+
+  it('handles optional and nullable together', () => {
+    const info = schemaInfo(Joi.number().allow(null))
+    expect(info.type).toBe('number')
+    expect(info.optional).toBe(true)
+    expect(info.nullable).toBe(true)
+  })
+
+  it('collects default value getter', () => {
+    const info = schemaInfo(Joi.string().default('foo'))
+    expect(info.type).toBe('string')
+    expect(typeof info.getDefaultValue).toBe('function')
+    expect(info.getDefaultValue?.()).toBe('foo')
+  })
+
+  it('handles default with modifiers', () => {
+    const info = schemaInfo(Joi.string().required().allow(null).default('bar'))
+    expect(info.type).toBe('string')
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(true)
+    expect(info.getDefaultValue?.()).toBe('bar')
+  })
+
+  it('returns enum values from valid()', () => {
+    const info = schemaInfo(Joi.string().valid('a', 'b').required())
+    expect(info).toEqual({
+      type: 'enum',
+      optional: false,
+      nullable: false,
+      enumValues: ['a', 'b'],
+    })
+  })
+
+  it('handles enums with optional, nullable and default', () => {
+    const info = schemaInfo(
+      Joi.string().valid('x', 'y').allow(null).default('x')
+    )
+    expect(info.type).toBe('enum')
+    expect(info.optional).toBe(true)
+    expect(info.nullable).toBe(true)
+    expect(info.enumValues).toEqual(['x', 'y'])
+    expect(info.getDefaultValue?.()).toBe('x')
+  })
+
+  it('handles boolean with modifiers', () => {
+    const info = schemaInfo(Joi.boolean().default(true))
+    expect(info.type).toBe('boolean')
+    expect(info.optional).toBe(true)
+    expect(info.getDefaultValue?.()).toBe(true)
+  })
+
+  it('handles date with modifiers', () => {
+    const info = schemaInfo(Joi.date().required().allow(null))
+    expect(info.type).toBe('date')
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(true)
+  })
+
+  it('preserves enum value order', () => {
+    const info = schemaInfo(Joi.string().valid('first', 'second', 'third'))
+    expect(info.enumValues).toEqual(['first', 'second', 'third'])
+  })
+
+  it('handles enum with single value', () => {
+    const info = schemaInfo(Joi.string().valid('only'))
+    expect(info.type).toBe('enum')
+    expect(info.enumValues).toEqual(['only'])
+  })
+
+  it('returns null for unsupported types', () => {
+    expect(schemaInfo(Joi.object())).toEqual({
+      type: null,
+      optional: true,
+      nullable: false,
+    })
+    expect(schemaInfo(Joi.array())).toEqual({
+      type: null,
+      optional: true,
+      nullable: false,
+    })
+  })
+
+  it('handles number with required and default', () => {
+    const info = schemaInfo(Joi.number().required().default(42))
+    expect(info.type).toBe('number')
+    expect(info.optional).toBe(false)
+    expect(info.getDefaultValue?.()).toBe(42)
+  })
+})
