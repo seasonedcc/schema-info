@@ -96,4 +96,28 @@ function fromJoi(schema: unknown): SchemaInfo {
   }
 }
 
-export { isJoiSchema, fromJoi }
+/**
+ * Extract field schemas from a Joi object schema.
+ *
+ * @param schema - A Joi schema that may be an object schema
+ * @returns A record mapping field names to their Joi field schemas,
+ *   or `null` if the schema is not an object type
+ */
+function extractJoiFields(schema: unknown): Record<string, unknown> | null {
+  const joiSchema = asJoiSchema(schema)
+  if (!joiSchema || joiSchema.type !== 'object') return null
+
+  // biome-ignore lint/suspicious/noExplicitAny: Joi internal structure
+  const keys = (schema as any)?.$_terms?.keys as
+    | { key: string; schema: unknown }[]
+    | undefined
+  if (!keys || !Array.isArray(keys)) return null
+
+  const result: Record<string, unknown> = {}
+  for (const entry of keys) {
+    result[entry.key] = entry.schema
+  }
+  return result
+}
+
+export { isJoiSchema, fromJoi, extractJoiFields }

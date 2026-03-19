@@ -128,4 +128,46 @@ function fromZod(
   }
 }
 
-export { isZodSchema, fromZod }
+function getZodShape(schema: unknown): Record<string, unknown> | null {
+  // biome-ignore lint/suspicious/noExplicitAny: Zod internal structure is not typed
+  if ((schema as any)?.shape) return (schema as any).shape
+
+  const def = getZodDef(schema)
+  if (!def) return null
+
+  if (def.type === 'pipe') {
+    // biome-ignore lint/suspicious/noExplicitAny: Zod internal structure is not typed
+    if ((def.in as any)?.shape) return (def.in as any).shape
+    // biome-ignore lint/suspicious/noExplicitAny: Zod internal structure is not typed
+    if ((def.out as any)?.shape) return (def.out as any).shape
+    return getZodShape(def.in) ?? getZodShape(def.out)
+  }
+
+  if (
+    def.type === 'readonly' ||
+    def.type === 'optional' ||
+    def.type === 'nullable' ||
+    def.type === 'default'
+  ) {
+    return getZodShape(def.innerType)
+  }
+
+  return null
+}
+
+/**
+ * Extract field schemas from a Zod object schema.
+ *
+ * Unwraps pipes, transforms, readonly, optional, nullable, and default
+ * wrappers to find the underlying object's `shape` property.
+ *
+ * @param schema - A Zod schema that may be or contain an object schema
+ * @returns A record mapping field names to their Zod field schemas,
+ *   or `null` if the schema is not an object type
+ */
+function extractZodFields(schema: unknown): Record<string, unknown> | null {
+  if (!isZodSchema(schema)) return null
+  return getZodShape(schema)
+}
+
+export { isZodSchema, fromZod, extractZodFields }

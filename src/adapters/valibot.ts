@@ -142,4 +142,34 @@ function fromValibot(
   }
 }
 
-export { isValibotSchema, fromValibot }
+/**
+ * Extract field schemas from a Valibot object schema.
+ *
+ * Handles `optional(object(...))` and `nullable(object(...))` wrappers
+ * by unwrapping via the `wrapped` property.
+ *
+ * @param schema - A Valibot schema that may be or contain an object schema
+ * @returns A record mapping field names to their Valibot field schemas,
+ *   or `null` if the schema is not an object type
+ */
+function extractValibotFields(schema: unknown): Record<string, unknown> | null {
+  const vSchema = asValibotSchema(schema)
+  if (!vSchema) return null
+
+  if (vSchema.type === 'object' && vSchema.entries) {
+    return vSchema.entries as Record<string, unknown>
+  }
+
+  if (
+    (vSchema.type === 'optional' ||
+      vSchema.type === 'nullable' ||
+      vSchema.type === 'nullish') &&
+    vSchema.wrapped
+  ) {
+    return extractValibotFields(vSchema.wrapped)
+  }
+
+  return null
+}
+
+export { isValibotSchema, fromValibot, extractValibotFields }

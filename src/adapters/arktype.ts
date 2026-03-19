@@ -162,4 +162,55 @@ function fromArkType(schema: unknown): SchemaInfo {
   return extractFromNode(node)
 }
 
-export { isArkTypeSchema, fromArkType }
+function getArkTypeStructure(node: ArkTypeNode): ArkTypeNode | null {
+  if (node.inner.structure) return node.inner.structure as ArkTypeNode
+  if (node.kind === 'morph' && node.inner.in) {
+    const input = node.inner.in as ArkTypeNode
+    if (input.inner?.structure) return input.inner.structure as ArkTypeNode
+  }
+  return null
+}
+
+type ArkTypeFieldInfo = { key: string; value: ArkTypeNode; optional: boolean }
+
+/**
+ * Extract field info from an ArkType object schema.
+ *
+ * Handles morph (pipe) wrappers by unwrapping via `inner.in`.
+ * Returns structured field info with optionality flag since ArkType
+ * stores optional status on the property node, not the value.
+ *
+ * @param schema - An ArkType type that may be an object type
+ * @returns An array of field info objects, or `null` if not an object type
+ */
+function extractArkTypeFields(schema: unknown): ArkTypeFieldInfo[] | null {
+  const node = asArkTypeSchema(schema)
+  if (!node) return null
+
+  const structure = getArkTypeStructure(node)
+  if (!structure) return null
+
+  const fields: ArkTypeFieldInfo[] = []
+  const required = (structure.inner.required ?? []) as ArkTypeNode[]
+  const optional = (structure.inner.optional ?? []) as ArkTypeNode[]
+
+  for (const prop of required) {
+    fields.push({
+      key: prop.inner.key as string,
+      value: prop.inner.value as ArkTypeNode,
+      optional: false,
+    })
+  }
+
+  for (const prop of optional) {
+    fields.push({
+      key: prop.inner.key as string,
+      value: prop.inner.value as ArkTypeNode,
+      optional: true,
+    })
+  }
+
+  return fields
+}
+
+export { isArkTypeSchema, fromArkType, extractArkTypeFields, extractFromNode }

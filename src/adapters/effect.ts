@@ -12,6 +12,7 @@ type EffectAST = {
   isOptional?: boolean
   enums?: [string, string | number][]
   annotations?: Record<string | symbol, unknown>
+  propertySignatures?: { name: string; type: EffectAST; isOptional: boolean }[]
 }
 
 type EffectSchema = {
@@ -191,4 +192,45 @@ function fromEffect(schema: unknown): SchemaInfo {
   return extractFromAST(effectSchema.ast)
 }
 
-export { isEffectSchema, fromEffect }
+function findTypeLiteral(ast: EffectAST): EffectAST | null {
+  if (ast._tag === 'TypeLiteral') return ast
+  if (ast._tag === 'Refinement' && ast.from) return findTypeLiteral(ast.from)
+  if (ast._tag === 'Transformation' && ast.from)
+    return findTypeLiteral(ast.from)
+  return null
+}
+
+type EffectFieldInfo = {
+  key: string
+  ast: EffectAST
+  optional: boolean
+}
+
+/**
+ * Extract field info from an Effect Schema struct.
+ *
+ * Unwraps Refinement and Transformation AST nodes to find the
+ * underlying TypeLiteral. Returns structured field info with
+ * optionality from property signatures.
+ *
+ * @param schema - An Effect Schema that may be a struct
+ * @returns An array of field info objects, or `null` if not a struct
+ */
+function extractEffectFields(schema: unknown): EffectFieldInfo[] | null {
+  const effectSchema = asEffectSchema(schema)
+  if (!effectSchema) return null
+
+  const typeLiteral = findTypeLiteral(effectSchema.ast)
+  if (!typeLiteral) return null
+
+  const signatures = typeLiteral.propertySignatures
+  if (!signatures || signatures.length === 0) return null
+
+  return signatures.map((sig) => ({
+    key: String(sig.name),
+    ast: sig.type,
+    optional: sig.isOptional === true,
+  }))
+}
+
+export { isEffectSchema, fromEffect, extractEffectFields, extractFromAST }

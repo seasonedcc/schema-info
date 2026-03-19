@@ -103,4 +103,20 @@ function fromYup(schema: unknown): SchemaInfo {
   }
 }
 
-export { isYupSchema, fromYup }
+/**
+ * Extract field schemas from a Yup object schema.
+ *
+ * @param schema - A Yup schema that may be an object schema
+ * @returns A record mapping field names to their Yup field schemas,
+ *   or `null` if the schema is not an object type
+ */
+function extractYupFields(schema: unknown): Record<string, unknown> | null {
+  const yupSchema = asYupSchema(schema)
+  if (!yupSchema || yupSchema.type !== 'object') return null
+  // biome-ignore lint/suspicious/noExplicitAny: Yup internal structure
+  const fields = (schema as any)?.fields
+  if (!fields || typeof fields !== 'object') return null
+  return fields
+}
+
+export { isYupSchema, fromYup, extractYupFields }

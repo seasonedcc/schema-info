@@ -2,7 +2,7 @@
 
 Universal schema introspection for TypeScript validation libraries.
 
-Extract field metadata (type, optionality, nullability, defaults, enum values) from schemas created with Zod, Yup, Valibot, ArkType, Effect Schema, or Joi — using a single function.
+Extract field metadata (type, optionality, nullability, defaults, enum values) from schemas created with Zod, Yup, Valibot, ArkType, Effect Schema, or Joi.
 
 ## Features
 
@@ -25,14 +25,72 @@ yarn add schema-info
 
 ## Quick Start
 
+Pass an object schema from any supported library and get back metadata for every field:
+
 ```ts
-import { schemaInfo } from 'schema-info'
+import { schemaFields } from 'schema-info'
+import * as z from 'zod'
+
+const fields = schemaFields(z.object({
+  name: z.string(),
+  age: z.number().optional(),
+  role: z.enum(['admin', 'user']),
+}))
+// {
+//   name: { type: 'string', optional: false, nullable: false },
+//   age: { type: 'number', optional: true, nullable: false },
+//   role: { type: 'enum', optional: false, nullable: false, enumValues: ['admin', 'user'] },
+// }
 ```
 
-Pass any schema field from any supported library — the library is detected automatically:
+The library is detected automatically — works the same way with every supported library:
 
 ```ts
-import * as z from 'zod'
+import * as yup from 'yup'
+import * as v from 'valibot'
+import { type } from 'arktype'
+import { Schema } from 'effect'
+import Joi from 'joi'
+
+schemaFields(yup.object({ name: yup.string().required(), age: yup.number() }))
+schemaFields(v.object({ name: v.string(), age: v.optional(v.number()) }))
+schemaFields(type({ name: 'string', 'age?': 'number' }))
+schemaFields(Schema.Struct({ name: Schema.String, age: Schema.optional(Schema.Number) }))
+schemaFields(Joi.object({ name: Joi.string().required(), age: Joi.number() }))
+```
+
+## API
+
+### `schemaFields(schema)`
+
+Extract field metadata from an object schema. Takes a schema that defines an object shape and returns a record mapping each field name to its `SchemaInfo`. Automatically unwraps transforms, pipes, refinements, and other wrappers to find the underlying object.
+
+```ts
+schemaFields(schema: unknown): Record<string, SchemaInfo> | null
+```
+
+Returns `null` if the schema is not a recognized object type.
+
+Works with wrapped schemas (transforms, pipes, refinements):
+
+```ts
+const schema = z.object({ name: z.string() }).transform((v) => v)
+schemaFields(schema)
+// { name: { type: 'string', optional: false, nullable: false } }
+```
+
+### `schemaInfo(schema?)`
+
+Extract metadata from an **individual field** schema. Useful when you already have a reference to a single field and need its metadata directly.
+
+```ts
+schemaInfo(schema?: unknown): SchemaInfo
+```
+
+Returns `{ type: null, optional: false, nullable: false }` for `undefined`, unsupported schemas, or unrecognized values. Compound types like objects, arrays, and tuples return `type: null`.
+
+```ts
+import { schemaInfo } from 'schema-info'
 
 schemaInfo(z.string())
 // { type: 'string', optional: false, nullable: false }
@@ -45,53 +103,6 @@ schemaInfo(z.string().default('hello'))
 
 schemaInfo(z.enum(['a', 'b', 'c']))
 // { type: 'enum', optional: false, nullable: false, enumValues: ['a', 'b', 'c'] }
-```
-
-Works the same way with every supported library:
-
-```ts
-import * as yup from 'yup'
-import * as v from 'valibot'
-import { type } from 'arktype'
-import { Schema } from 'effect'
-import Joi from 'joi'
-
-schemaInfo(yup.string().required())
-// { type: 'string', optional: false, nullable: false }
-
-schemaInfo(v.optional(v.number(), 42))
-// { type: 'number', optional: true, nullable: false, getDefaultValue: [Function] }
-
-schemaInfo(type('string | null'))
-// { type: 'string', optional: false, nullable: true }
-
-schemaInfo(Schema.NullishOr(Schema.Boolean))
-// { type: 'boolean', optional: true, nullable: true }
-
-schemaInfo(Joi.date().required().allow(null))
-// { type: 'date', optional: false, nullable: true }
-```
-
-## API
-
-### `schemaInfo(schema?)`
-
-Extract field metadata from a schema produced by any supported validation library. The library is detected automatically by inspecting the schema object's internal structure.
-
-```ts
-schemaInfo(schema?: unknown): SchemaInfo
-```
-
-Returns `{ type: null, optional: false, nullable: false }` for `undefined`, unsupported schemas, or unrecognized values.
-
-This library introspects **scalar field types** only. Compound types like objects, arrays, and tuples return `type: null`:
-
-```ts
-schemaInfo(z.object({ name: z.string() }))
-// { type: null, optional: false, nullable: false }
-
-schemaInfo(z.array(z.number()))
-// { type: null, optional: false, nullable: false }
 ```
 
 ## Supported Libraries
