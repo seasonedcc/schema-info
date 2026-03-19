@@ -109,7 +109,7 @@ schemaInfo(z.array(z.number()))
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `type` | `FieldType \| null` | `'string'`, `'number'`, `'boolean'`, `'date'`, `'datetime'`, `'enum'`, or `null` for unsupported types |
+| `type` | `FieldType \| null` | `'string'`, `'number'`, `'boolean'`, `'date'`, `'enum'`, or `null` for unsupported types |
 | `optional` | `boolean` | Whether the field accepts `undefined` |
 | `nullable` | `boolean` | Whether the field accepts `null` |
 | `getDefaultValue` | `(() => unknown) \| undefined` | A function that returns the default value, if one is set |
@@ -123,7 +123,7 @@ All types are exported for use in your own code:
 import type { SchemaInfo, FieldType } from 'schema-info'
 ```
 
-**`FieldType`** — `'string' | 'number' | 'boolean' | 'date' | 'datetime' | 'enum'`
+**`FieldType`** — `'string' | 'number' | 'boolean' | 'date' | 'enum'`
 
 **`SchemaInfo`** — The universal output type:
 
