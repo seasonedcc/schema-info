@@ -84,6 +84,16 @@ schemaInfo(schema?: unknown): SchemaInfo
 
 Returns `{ type: null, optional: false, nullable: false }` for `undefined`, unsupported schemas, or unrecognized values.
 
+This library introspects **scalar field types** only. Compound types like objects, arrays, and tuples return `type: null`:
+
+```ts
+schemaInfo(z.object({ name: z.string() }))
+// { type: null, optional: false, nullable: false }
+
+schemaInfo(z.array(z.number()))
+// { type: null, optional: false, nullable: false }
+```
+
 ## Supported Libraries
 
 | Library | Versions | Detection |
