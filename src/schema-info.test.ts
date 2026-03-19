@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import * as yup from 'yup'
 import * as z from 'zod'
 import { schemaInfo } from './schema-info'
 
@@ -235,5 +236,157 @@ describe('schemaInfo', () => {
       optional: false,
       nullable: false,
     })
+  })
+})
+
+describe('schemaInfo with Yup', () => {
+  it('extracts info from primitive schemas', () => {
+    expect(schemaInfo(yup.string().required())).toEqual({
+      type: 'string',
+      optional: false,
+      nullable: false,
+    })
+  })
+
+  it('treats Yup schemas as optional by default', () => {
+    const info = schemaInfo(yup.string())
+    expect(info.type).toBe('string')
+    expect(info.optional).toBe(true)
+  })
+
+  it('marks required schemas as not optional', () => {
+    const info = schemaInfo(yup.number().required())
+    expect(info.type).toBe('number')
+    expect(info.optional).toBe(false)
+  })
+
+  it('marks nullable schemas correctly', () => {
+    const info = schemaInfo(yup.string().required().nullable())
+    expect(info.type).toBe('string')
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(true)
+  })
+
+  it('handles optional and nullable together', () => {
+    const info = schemaInfo(yup.number().nullable())
+    expect(info.type).toBe('number')
+    expect(info.optional).toBe(true)
+    expect(info.nullable).toBe(true)
+  })
+
+  it('collects default value getter', () => {
+    const info = schemaInfo(yup.string().required().default('foo'))
+    expect(info.type).toBe('string')
+    expect(typeof info.getDefaultValue).toBe('function')
+    expect(info.getDefaultValue?.()).toBe('foo')
+  })
+
+  it('handles default with modifiers', () => {
+    const info = schemaInfo(yup.string().nullable().default('bar'))
+    expect(info.type).toBe('string')
+    expect(info.optional).toBe(true)
+    expect(info.nullable).toBe(true)
+    expect(info.getDefaultValue?.()).toBe('bar')
+  })
+
+  it('returns enum values from oneOf', () => {
+    const info = schemaInfo(yup.string().oneOf(['a', 'b']).required())
+    expect(info).toEqual({
+      type: 'enum',
+      optional: false,
+      nullable: false,
+      enumValues: ['a', 'b'],
+    })
+  })
+
+  it('handles enums with optional, nullable and default modifiers', () => {
+    const info = schemaInfo(
+      yup.string().oneOf(['x', 'y']).nullable().default('x')
+    )
+    expect(info.type).toBe('enum')
+    expect(info.optional).toBe(true)
+    expect(info.nullable).toBe(true)
+    expect(info.enumValues).toEqual(['x', 'y'])
+    expect(info.getDefaultValue?.()).toBe('x')
+  })
+
+  it('extracts info from boolean type', () => {
+    expect(schemaInfo(yup.boolean().required())).toEqual({
+      type: 'boolean',
+      optional: false,
+      nullable: false,
+    })
+  })
+
+  it('extracts info from date type', () => {
+    expect(schemaInfo(yup.date().required())).toEqual({
+      type: 'date',
+      optional: false,
+      nullable: false,
+    })
+  })
+
+  it('handles boolean with modifiers', () => {
+    const info = schemaInfo(yup.boolean().default(true))
+    expect(info.type).toBe('boolean')
+    expect(info.optional).toBe(true)
+    expect(info.getDefaultValue?.()).toBe(true)
+  })
+
+  it('handles date with modifiers', () => {
+    const testDate = new Date('2025-01-01')
+    const info = schemaInfo(yup.date().required().nullable().default(testDate))
+    expect(info.type).toBe('date')
+    expect(info.nullable).toBe(true)
+    expect(info.getDefaultValue?.()).toEqual(testDate)
+  })
+
+  it('returns null for unsupported types', () => {
+    expect(schemaInfo(yup.object())).toEqual({
+      type: null,
+      optional: true,
+      nullable: false,
+    })
+    expect(schemaInfo(yup.array())).toEqual({
+      type: null,
+      optional: true,
+      nullable: false,
+    })
+    expect(schemaInfo(yup.mixed())).toEqual({
+      type: null,
+      optional: true,
+      nullable: false,
+    })
+  })
+
+  it('preserves enum value order', () => {
+    const info = schemaInfo(yup.string().oneOf(['first', 'second', 'third']))
+    expect(info.enumValues).toEqual(['first', 'second', 'third'])
+  })
+
+  it('handles enum with single value', () => {
+    const info = schemaInfo(yup.string().oneOf(['only']))
+    expect(info.type).toBe('enum')
+    expect(info.enumValues).toEqual(['only'])
+  })
+
+  it('is transparent to transforms', () => {
+    const info = schemaInfo(
+      yup
+        .string()
+        .required()
+        .transform((v) => v?.toUpperCase())
+    )
+    expect(info.type).toBe('string')
+    expect(info.optional).toBe(false)
+  })
+
+  it('handles date with all modifier types', () => {
+    const testDate = new Date('2025-10-09')
+    const info = schemaInfo(yup.date().nullable().default(testDate))
+    expect(info.type).toBe('date')
+    expect(info.optional).toBe(true)
+    expect(info.nullable).toBe(true)
+    expect(info.getDefaultValue?.()).toEqual(testDate)
   })
 })
