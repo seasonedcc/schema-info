@@ -79,6 +79,21 @@ schemaFields(schema)
 // { name: { type: 'string', optional: false, nullable: false } }
 ```
 
+Throws a `SchemaFieldsError` when the schema is unrecognized or not an object type:
+
+```ts
+import { schemaFields, SchemaFieldsError } from 'schema-info'
+
+try {
+  schemaFields(z.string()) // not an object schema
+} catch (error) {
+  if (error instanceof SchemaFieldsError) {
+    error.reason  // 'not-object'
+    error.library // 'Zod'
+  }
+}
+```
+
 ### `schemaInfo(schema?)`
 
 Extract metadata from an **individual field** schema. Useful when you already have a reference to a single field and need its metadata directly.
