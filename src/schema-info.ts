@@ -1,3 +1,4 @@
+import { fromYup, isYupSchema } from './adapters/yup'
 import { fromZod, isZodSchema } from './adapters/zod'
 import type { SchemaInfo } from './types'
 
@@ -11,6 +12,7 @@ const empty: SchemaInfo = { type: null, optional: false, nullable: false }
  * object's internal structure. Currently supports:
  *
  * - **Zod 4+**
+ * - **Yup 1.x**
  *
  * @param schema - A schema field from any supported library, or `undefined`
  * @returns Metadata describing the field's type, optionality, nullability,
@@ -28,6 +30,7 @@ const empty: SchemaInfo = { type: null, optional: false, nullable: false }
 function schemaInfo(schema?: unknown): SchemaInfo {
   if (!schema) return empty
   if (isZodSchema(schema)) return fromZod(schema)
+  if (isYupSchema(schema)) return fromYup(schema)
   return empty
 }
 

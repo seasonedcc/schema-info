@@ -20,6 +20,19 @@ function getZodValues(schema: unknown): Iterable<unknown> | null {
   return (schema as any)?._zod?.values ?? null
 }
 
+/**
+ * Detect whether the given value is a Zod 4+ schema.
+ *
+ * @param schema - Any value to check
+ * @returns `true` when the value is a Zod schema instance
+ *
+ * @example
+ * ```ts
+ * import * as z from 'zod'
+ * isZodSchema(z.string()) // true
+ * isZodSchema('hello')    // false
+ * ```
+ */
 function isZodSchema(schema: unknown): boolean {
   return getZodDef(schema) !== null
 }
@@ -32,6 +45,28 @@ const typeMap: Record<string, FieldType> = {
   enum: 'enum',
 }
 
+/**
+ * Extract {@link SchemaInfo} from a Zod 4+ schema.
+ *
+ * Recursively unwraps modifier types (`optional`, `nullable`, `default`,
+ * `pipe`) to reach the base type. Transforms are opaque and yield
+ * `type: null`.
+ *
+ * @param schema - A Zod schema instance
+ * @param optional - Accumulated optionality from outer wrappers
+ * @param nullable - Accumulated nullability from outer wrappers
+ * @param getDefaultValue - Default value getter from an outer `default` wrapper
+ * @param enumValues - Enum values carried from an outer wrapper
+ * @returns Metadata describing the field's type, optionality, nullability,
+ *   default value and enum values
+ *
+ * @example
+ * ```ts
+ * import * as z from 'zod'
+ * fromZod(z.string().optional())
+ * // { type: 'string', optional: true, nullable: false }
+ * ```
+ */
 function fromZod(
   schema: unknown,
   optional = false,
