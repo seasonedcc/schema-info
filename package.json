@@ -1,0 +1,46 @@
+{
+  "name": "schema-info",
+  "version": "0.0.1",
+  "description": "Universal schema introspection for TypeScript validation libraries",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "files": ["README.md", "./dist/*"],
+  "license": "MIT",
+  "scripts": {
+    "build": "rm -rf dist && tsup ./src/index.ts --format esm,cjs --dts",
+    "dev": "tsup ./src/index.ts --format esm,cjs --watch --dts",
+    "tsc": "tsc",
+    "test": "vitest run",
+    "lint": "biome check --error-on-warnings",
+    "lint-fix": "biome check --write --error-on-warnings"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/seasonedcc/schema-info.git"
+  },
+  "bugs": {
+    "url": "https://github.com/seasonedcc/schema-info/issues"
+  },
+  "homepage": "https://github.com/seasonedcc/schema-info#readme",
+  "keywords": [
+    "schema",
+    "introspection",
+    "zod",
+    "yup",
+    "valibot",
+    "arktype",
+    "validation",
+    "typescript"
+  ],
+  "author": "Daniel Weinmann",
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "tsup": "^8.3.5",
+    "typescript": "5.8.3",
+    "vite": "6.0.7",
+    "vitest": "2.1.8",
+    "zod": "^4.0.0"
+  }
+}
