@@ -6,16 +6,30 @@ import { describe, expect, it } from 'vitest'
 import * as yup from 'yup'
 import * as z from 'zod'
 import { schemaFields } from './schema-fields'
+import { SchemaFieldsError } from './schema-fields-error'
 
 describe('schemaFields', () => {
-  it('returns null for undefined', () => {
-    expect(schemaFields(undefined)).toBeNull()
+  it('throws unrecognized for undefined', () => {
+    expect(() => schemaFields(undefined)).toThrow(SchemaFieldsError)
+    expect(() => schemaFields(undefined)).toThrow('Unrecognized schema')
   })
 
-  it('returns null for non-object values', () => {
-    expect(schemaFields('hello')).toBeNull()
-    expect(schemaFields(42)).toBeNull()
-    expect(schemaFields({})).toBeNull()
+  it('throws unrecognized for non-schema values', () => {
+    expect(() => schemaFields('hello')).toThrow(SchemaFieldsError)
+    expect(() => schemaFields(42)).toThrow(SchemaFieldsError)
+    expect(() => schemaFields({})).toThrow(SchemaFieldsError)
+  })
+
+  it('includes reason and schema on the error', () => {
+    try {
+      schemaFields('hello')
+    } catch (error) {
+      expect(error).toBeInstanceOf(SchemaFieldsError)
+      const e = error as SchemaFieldsError
+      expect(e.reason).toBe('unrecognized')
+      expect(e.schema).toBe('hello')
+      expect(e.library).toBeUndefined()
+    }
   })
 })
 
@@ -61,9 +75,16 @@ describe('schemaFields with Zod', () => {
     expect(fields?.status.enumValues).toEqual(['active', 'inactive'])
   })
 
-  it('returns null for non-object Zod schemas', () => {
-    expect(schemaFields(z.string())).toBeNull()
-    expect(schemaFields(z.array(z.string()))).toBeNull()
+  it('throws not-object for non-object Zod schemas', () => {
+    expect(() => schemaFields(z.string())).toThrow(SchemaFieldsError)
+    expect(() => schemaFields(z.array(z.string()))).toThrow(SchemaFieldsError)
+    try {
+      schemaFields(z.string())
+    } catch (error) {
+      const e = error as SchemaFieldsError
+      expect(e.reason).toBe('not-object')
+      expect(e.library).toBe('Zod')
+    }
   })
 
   it('unwraps transform wrappers', () => {
@@ -143,9 +164,15 @@ describe('schemaFields with Yup', () => {
     expect(fields?.status.enumValues).toEqual(['active', 'inactive'])
   })
 
-  it('returns null for non-object Yup schemas', () => {
-    expect(schemaFields(yup.string())).toBeNull()
-    expect(schemaFields(yup.array())).toBeNull()
+  it('throws not-object for non-object Yup schemas', () => {
+    expect(() => schemaFields(yup.string())).toThrow(SchemaFieldsError)
+    try {
+      schemaFields(yup.string())
+    } catch (error) {
+      const e = error as SchemaFieldsError
+      expect(e.reason).toBe('not-object')
+      expect(e.library).toBe('Yup')
+    }
   })
 
   it('works with transformed objects', () => {
@@ -187,9 +214,15 @@ describe('schemaFields with Valibot', () => {
     expect(fields?.status.enumValues).toEqual(['active', 'inactive'])
   })
 
-  it('returns null for non-object Valibot schemas', () => {
-    expect(schemaFields(v.string())).toBeNull()
-    expect(schemaFields(v.array(v.string()))).toBeNull()
+  it('throws not-object for non-object Valibot schemas', () => {
+    expect(() => schemaFields(v.string())).toThrow(SchemaFieldsError)
+    try {
+      schemaFields(v.string())
+    } catch (error) {
+      const e = error as SchemaFieldsError
+      expect(e.reason).toBe('not-object')
+      expect(e.library).toBe('Valibot')
+    }
   })
 
   it('works with piped objects', () => {
@@ -222,8 +255,15 @@ describe('schemaFields with ArkType', () => {
     expect(fields?.created.type).toBe('date')
   })
 
-  it('returns null for non-object ArkType schemas', () => {
-    expect(schemaFields(type('string'))).toBeNull()
+  it('throws not-object for non-object ArkType schemas', () => {
+    expect(() => schemaFields(type('string'))).toThrow(SchemaFieldsError)
+    try {
+      schemaFields(type('string'))
+    } catch (error) {
+      const e = error as SchemaFieldsError
+      expect(e.reason).toBe('not-object')
+      expect(e.library).toBe('ArkType')
+    }
   })
 
   it('unwraps morph (pipe) wrappers', () => {
@@ -265,8 +305,15 @@ describe('schemaFields with Effect Schema', () => {
     expect(fields?.status.enumValues).toEqual(['active', 'inactive'])
   })
 
-  it('returns null for non-struct Effect schemas', () => {
-    expect(schemaFields(S.String)).toBeNull()
+  it('throws not-object for non-struct Effect schemas', () => {
+    expect(() => schemaFields(S.String)).toThrow(SchemaFieldsError)
+    try {
+      schemaFields(S.String)
+    } catch (error) {
+      const e = error as SchemaFieldsError
+      expect(e.reason).toBe('not-object')
+      expect(e.library).toBe('Effect Schema')
+    }
   })
 
   it('unwraps filter (refinement) wrappers', () => {
@@ -317,8 +364,14 @@ describe('schemaFields with Joi', () => {
     expect(fields?.status.enumValues).toEqual(['active', 'inactive'])
   })
 
-  it('returns null for non-object Joi schemas', () => {
-    expect(schemaFields(Joi.string())).toBeNull()
-    expect(schemaFields(Joi.array())).toBeNull()
+  it('throws not-object for non-object Joi schemas', () => {
+    expect(() => schemaFields(Joi.string())).toThrow(SchemaFieldsError)
+    try {
+      schemaFields(Joi.string())
+    } catch (error) {
+      const e = error as SchemaFieldsError
+      expect(e.reason).toBe('not-object')
+      expect(e.library).toBe('Joi')
+    }
   })
 })
