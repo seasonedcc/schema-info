@@ -117,4 +117,33 @@ describe('schemaInfo with Effect Schema', () => {
       nullable: false,
     })
   })
+
+  it('extracts uuid format', () => {
+    expect(schemaInfo(S.UUID)).toMatchObject({
+      type: 'string',
+      format: 'uuid',
+    })
+  })
+
+  it('extracts ulid format', () => {
+    expect(schemaInfo(S.ULID)).toMatchObject({
+      type: 'string',
+      format: 'ulid',
+    })
+  })
+
+  it('extracts datetime format from DateTimeUtc', () => {
+    expect(schemaInfo(S.DateTimeUtc)).toMatchObject({
+      type: 'string',
+      format: 'datetime',
+    })
+  })
+
+  it('does not set format on plain string', () => {
+    expect(schemaInfo(S.String).format).toBeUndefined()
+  })
+
+  it('does not set format on Date (type is already date)', () => {
+    expect(schemaInfo(S.Date).format).toBeUndefined()
+  })
 })

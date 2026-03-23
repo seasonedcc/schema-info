@@ -1,4 +1,4 @@
-import type { FieldType, SchemaInfo } from '../types'
+import type { FieldFormat, FieldType, SchemaInfo } from '../types'
 
 type YupSpec = {
   optional?: boolean
@@ -7,11 +7,23 @@ type YupSpec = {
   [key: string]: unknown
 }
 
+type YupTest = {
+  OPTIONS?: { name?: string }
+}
+
 type YupInternalSchema = {
   type: string
   spec: YupSpec
+  tests: YupTest[]
   _whitelist: Iterable<unknown>
   _blacklist: Iterable<unknown>
+}
+
+const yupFormatMap: Record<string, FieldFormat> = {
+  email: 'email',
+  url: 'url',
+  uuid: 'uuid',
+  datetime: 'datetime',
 }
 
 function asYupSchema(schema: unknown): YupInternalSchema | null {
@@ -95,8 +107,18 @@ function fromYup(schema: unknown): SchemaInfo {
     }
   }
 
+  let format: FieldFormat | undefined
+  for (const test of yupSchema.tests) {
+    const name = test.OPTIONS?.name
+    if (name && name in yupFormatMap) {
+      format = yupFormatMap[name]
+      break
+    }
+  }
+
   return {
     type: typeMap[type] ?? null,
+    ...(format && { format }),
     optional,
     nullable,
     getDefaultValue,

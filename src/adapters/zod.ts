@@ -1,7 +1,9 @@
-import type { FieldType, SchemaInfo } from '../types'
+import type { FieldFormat, FieldType, SchemaInfo } from '../types'
+import { fieldFormatValues } from '../types'
 
 type ZodInternalDef = {
   type: string
+  format?: string
   innerType?: unknown
   in?: unknown
   out?: unknown
@@ -14,6 +16,16 @@ type ZodInternalDef = {
 function getZodDef(schema: unknown): ZodInternalDef | null {
   // biome-ignore lint/suspicious/noExplicitAny: Zod internal structure is not typed
   return (schema as any)?._zod?.def ?? null
+}
+
+function getZodFormat(schema: unknown): FieldFormat | undefined {
+  const def = getZodDef(schema)
+  // biome-ignore lint/suspicious/noExplicitAny: Zod internal structure is not typed
+  const raw = def?.format ?? (schema as any)?._zod?.bag?.format
+  if (typeof raw === 'string' && fieldFormatValues.has(raw)) {
+    return raw as FieldFormat
+  }
+  return undefined
 }
 
 function getZodValues(schema: unknown): Iterable<unknown> | null {
@@ -97,30 +109,66 @@ function fromZod(
   optional = false,
   nullable = false,
   getDefaultValue?: SchemaInfo['getDefaultValue'],
-  enumValues?: SchemaInfo['enumValues']
+  enumValues?: SchemaInfo['enumValues'],
+  format?: FieldFormat
 ): SchemaInfo {
   const def = getZodDef(schema)
 
   if (!def) {
-    return { type: null, optional, nullable, getDefaultValue, enumValues }
+    return {
+      type: null,
+      ...(format && { format }),
+      optional,
+      nullable,
+      getDefaultValue,
+      enumValues,
+    }
   }
 
   const { type } = def
 
   if (type === 'transform') {
-    return { type: null, optional, nullable, getDefaultValue, enumValues }
+    return {
+      type: null,
+      ...(format && { format }),
+      optional,
+      nullable,
+      getDefaultValue,
+      enumValues,
+    }
   }
 
   if (type === 'pipe') {
-    return fromZod(def.in, optional, nullable, getDefaultValue, enumValues)
+    return fromZod(
+      def.in,
+      optional,
+      nullable,
+      getDefaultValue,
+      enumValues,
+      format ?? getZodFormat(schema)
+    )
   }
 
   if (type === 'optional') {
-    return fromZod(def.innerType, true, nullable, getDefaultValue, enumValues)
+    return fromZod(
+      def.innerType,
+      true,
+      nullable,
+      getDefaultValue,
+      enumValues,
+      format
+    )
   }
 
   if (type === 'nullable') {
-    return fromZod(def.innerType, optional, true, getDefaultValue, enumValues)
+    return fromZod(
+      def.innerType,
+      optional,
+      true,
+      getDefaultValue,
+      enumValues,
+      format
+    )
   }
 
   if (type === 'default') {
@@ -129,7 +177,8 @@ function fromZod(
       optional,
       nullable,
       () => def.defaultValue,
-      enumValues
+      enumValues,
+      format
     )
   }
 
@@ -190,7 +239,8 @@ function fromZod(
         isOptional,
         isNullable,
         getDefaultValue,
-        enumValues
+        enumValues,
+        format
       )
     }
 
@@ -214,8 +264,10 @@ function fromZod(
     }
   }
 
+  const resolvedFormat = format ?? getZodFormat(schema)
   return {
     type: typeMap[type] ?? null,
+    ...(resolvedFormat && { format: resolvedFormat }),
     optional,
     nullable,
     getDefaultValue,

@@ -1,9 +1,25 @@
-import type { FieldType, SchemaInfo } from '../types'
+import type { FieldFormat, FieldType, SchemaInfo } from '../types'
+import { fieldFormatValues } from '../types'
 
 type ArkTypeNode = {
   kind: string
   inner: Record<string, unknown>
+  meta?: Record<string, unknown>
   '~standard'?: { vendor?: string }
+}
+
+const arkFormatMap: Record<string, FieldFormat> = {
+  uri: 'url',
+}
+
+function resolveArkFormat(
+  meta?: Record<string, unknown>
+): FieldFormat | undefined {
+  const raw = meta?.format
+  if (typeof raw !== 'string') return undefined
+  if (raw in arkFormatMap) return arkFormatMap[raw]
+  if (fieldFormatValues.has(raw)) return raw as FieldFormat
+  return undefined
 }
 
 function asArkTypeSchema(schema: unknown): ArkTypeNode | null {
@@ -121,11 +137,20 @@ function extractFromNode(node: ArkTypeNode): SchemaInfo {
   }
 
   if (kind === 'union') {
-    return extractFromBranches((inner.branches as ArkTypeNode[]) ?? [])
+    const format = resolveArkFormat(node.meta)
+    const info = extractFromBranches((inner.branches as ArkTypeNode[]) ?? [])
+    if (format) {
+      return { ...info, format, type: info.type ?? 'string' }
+    }
+    return info
   }
 
   if (kind === 'intersection') {
-    if (inner.domain) return extractFromNode(inner.domain as ArkTypeNode)
+    const format = resolveArkFormat(node.meta)
+    if (inner.domain) {
+      const info = extractFromNode(inner.domain as ArkTypeNode)
+      return { ...info, ...(format && { format }) }
+    }
     if (inner.proto) return extractFromNode(inner.proto as ArkTypeNode)
     return { type: null, optional: false, nullable: false }
   }

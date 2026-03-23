@@ -1,35 +1,52 @@
-/**
- * Supported field types recognized by schema introspection.
- *
- * @example
- * ```ts
- * const t: FieldType = 'string'
- * ```
- */
 type FieldType = 'string' | 'number' | 'boolean' | 'date' | 'enum'
 
-/**
- * Metadata extracted from a schema field by {@link schemaInfo}.
- *
- * This is the universal output type — regardless of which schema library
- * produced the original field definition, the result is always a
- * `SchemaInfo` object.
- *
- * @example
- * ```ts
- * const info: SchemaInfo = {
- *   type: 'string',
- *   optional: false,
- *   nullable: true,
- * }
- * ```
- */
+type FieldFormat =
+  | 'date'
+  | 'datetime'
+  | 'time'
+  | 'duration'
+  | 'email'
+  | 'url'
+  | 'uuid'
+  | 'cuid'
+  | 'cuid2'
+  | 'ulid'
+  | 'emoji'
+  | 'base64'
+  | 'jwt'
+  | 'nanoid'
+  | 'ip'
+  | 'ipv4'
+  | 'ipv6'
+
+const fieldFormatValues: Set<string> = new Set([
+  'date',
+  'datetime',
+  'time',
+  'duration',
+  'email',
+  'url',
+  'uuid',
+  'cuid',
+  'cuid2',
+  'ulid',
+  'emoji',
+  'base64',
+  'jwt',
+  'nanoid',
+  'ip',
+  'ipv4',
+  'ipv6',
+])
+
 type SchemaInfo = {
   type: FieldType | null
+  format?: FieldFormat
   optional: boolean
   nullable: boolean
   getDefaultValue?: () => unknown
   enumValues?: string[]
 }
 
-export type { FieldType, SchemaInfo }
+export { fieldFormatValues }
+export type { FieldType, FieldFormat, SchemaInfo }

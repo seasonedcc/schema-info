@@ -281,4 +281,172 @@ describe('schemaInfo with Zod', () => {
     expect(info.nullable).toBe(true)
     expect(info.getDefaultValue?.()).toBe(testDate)
   })
+
+  it('extracts format from z.email()', () => {
+    expect(schemaInfo(z.email())).toMatchObject({
+      type: 'string',
+      format: 'email',
+    })
+  })
+
+  it('extracts format from z.string().email()', () => {
+    expect(schemaInfo(z.string().email())).toMatchObject({
+      type: 'string',
+      format: 'email',
+    })
+  })
+
+  it('extracts format from z.url()', () => {
+    expect(schemaInfo(z.url())).toMatchObject({
+      type: 'string',
+      format: 'url',
+    })
+  })
+
+  it('extracts format from z.string().url()', () => {
+    expect(schemaInfo(z.string().url())).toMatchObject({
+      type: 'string',
+      format: 'url',
+    })
+  })
+
+  it('extracts format from z.uuid()', () => {
+    expect(schemaInfo(z.uuid())).toMatchObject({
+      type: 'string',
+      format: 'uuid',
+    })
+  })
+
+  it('extracts format from z.iso.date()', () => {
+    expect(schemaInfo(z.iso.date())).toMatchObject({
+      type: 'string',
+      format: 'date',
+    })
+  })
+
+  it('extracts format from z.iso.datetime()', () => {
+    expect(schemaInfo(z.iso.datetime())).toMatchObject({
+      type: 'string',
+      format: 'datetime',
+    })
+  })
+
+  it('extracts format from z.iso.time()', () => {
+    expect(schemaInfo(z.iso.time())).toMatchObject({
+      type: 'string',
+      format: 'time',
+    })
+  })
+
+  it('extracts format from z.iso.duration()', () => {
+    expect(schemaInfo(z.iso.duration())).toMatchObject({
+      type: 'string',
+      format: 'duration',
+    })
+  })
+
+  it('extracts format from z.cuid()', () => {
+    expect(schemaInfo(z.cuid())).toMatchObject({
+      type: 'string',
+      format: 'cuid',
+    })
+  })
+
+  it('extracts format from z.cuid2()', () => {
+    expect(schemaInfo(z.cuid2())).toMatchObject({
+      type: 'string',
+      format: 'cuid2',
+    })
+  })
+
+  it('extracts format from z.ulid()', () => {
+    expect(schemaInfo(z.ulid())).toMatchObject({
+      type: 'string',
+      format: 'ulid',
+    })
+  })
+
+  it('extracts format from z.emoji()', () => {
+    expect(schemaInfo(z.emoji())).toMatchObject({
+      type: 'string',
+      format: 'emoji',
+    })
+  })
+
+  it('extracts format from z.base64()', () => {
+    expect(schemaInfo(z.base64())).toMatchObject({
+      type: 'string',
+      format: 'base64',
+    })
+  })
+
+  it('extracts format from z.jwt()', () => {
+    expect(schemaInfo(z.jwt())).toMatchObject({
+      type: 'string',
+      format: 'jwt',
+    })
+  })
+
+  it('extracts format from z.nanoid()', () => {
+    expect(schemaInfo(z.nanoid())).toMatchObject({
+      type: 'string',
+      format: 'nanoid',
+    })
+  })
+
+  it('extracts format from z.string().date()', () => {
+    expect(schemaInfo(z.string().date())).toMatchObject({
+      type: 'string',
+      format: 'date',
+    })
+  })
+
+  it('extracts format from z.string().datetime()', () => {
+    expect(schemaInfo(z.string().datetime())).toMatchObject({
+      type: 'string',
+      format: 'datetime',
+    })
+  })
+
+  it('extracts format from z.string().time()', () => {
+    expect(schemaInfo(z.string().time())).toMatchObject({
+      type: 'string',
+      format: 'time',
+    })
+  })
+
+  it('preserves format through optional wrapper', () => {
+    const info = schemaInfo(z.email().optional())
+    expect(info).toMatchObject({
+      type: 'string',
+      format: 'email',
+      optional: true,
+    })
+  })
+
+  it('preserves format through nullable wrapper', () => {
+    const info = schemaInfo(z.iso.date().nullable())
+    expect(info).toMatchObject({
+      type: 'string',
+      format: 'date',
+      nullable: true,
+    })
+  })
+
+  it('preserves format through default wrapper', () => {
+    const info = schemaInfo(z.email().default('a@b.com'))
+    expect(info).toMatchObject({
+      type: 'string',
+      format: 'email',
+    })
+    expect(info.getDefaultValue?.()).toBe('a@b.com')
+  })
+
+  it('does not set format on plain string', () => {
+    expect(schemaInfo(z.string()).format).toBeUndefined()
+  })
+
+  it('does not set format on z.date()', () => {
+    expect(schemaInfo(z.date()).format).toBeUndefined()
+  })
 })

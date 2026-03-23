@@ -1,4 +1,4 @@
-import type { FieldType, SchemaInfo } from '../types'
+import type { FieldFormat, FieldType, SchemaInfo } from '../types'
 
 const TypeId = Symbol.for('effect/Schema')
 const IdentifierAnnotationId = Symbol.for('effect/annotation/Identifier')
@@ -57,6 +57,12 @@ function isDateAST(ast: EffectAST): boolean {
   return id === 'Date' || id === 'DateFromSelf'
 }
 
+const effectFormatMap: Record<string, FieldFormat> = {
+  UUID: 'uuid',
+  ULID: 'ulid',
+  DateTimeUtc: 'datetime',
+}
+
 const tagMap: Record<string, FieldType> = {
   StringKeyword: 'string',
   NumberKeyword: 'number',
@@ -101,12 +107,17 @@ function extractFromAST(
     return { type: 'date', optional, nullable }
   }
 
+  const identifier = getIdentifier(ast)
+  const format = identifier ? effectFormatMap[identifier] : undefined
+
   if (_tag === 'Refinement' && ast.from) {
-    return extractFromAST(ast.from, optional, nullable)
+    const info = extractFromAST(ast.from, optional, nullable)
+    return format ? { ...info, format } : info
   }
 
   if (_tag === 'Transformation' && ast.from) {
-    return extractFromAST(ast.from, optional, nullable)
+    const info = extractFromAST(ast.from, optional, nullable)
+    return format ? { ...info, format } : info
   }
 
   if (_tag === 'Union' && ast.types) {

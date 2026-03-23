@@ -129,4 +129,47 @@ describe('schemaInfo with ArkType', () => {
     expect(info.optional).toBe(true)
     expect(info.nullable).toBe(true)
   })
+
+  it('extracts email format', () => {
+    expect(schemaInfo(type('string.email'))).toMatchObject({
+      type: 'string',
+      format: 'email',
+    })
+  })
+
+  it('extracts url format', () => {
+    expect(schemaInfo(type('string.url'))).toMatchObject({
+      type: 'string',
+      format: 'url',
+    })
+  })
+
+  it('extracts uuid format', () => {
+    expect(schemaInfo(type('string.uuid'))).toMatchObject({
+      type: 'string',
+      format: 'uuid',
+    })
+  })
+
+  it('extracts ipv4 format', () => {
+    expect(schemaInfo(type('string.ip.v4'))).toMatchObject({
+      type: 'string',
+      format: 'ipv4',
+    })
+  })
+
+  it('extracts ipv6 format', () => {
+    expect(schemaInfo(type('string.ip.v6'))).toMatchObject({
+      type: 'string',
+      format: 'ipv6',
+    })
+  })
+
+  it('does not set format on plain string', () => {
+    expect(schemaInfo(type('string')).format).toBeUndefined()
+  })
+
+  it('does not set format on constrained string', () => {
+    expect(schemaInfo(type('string > 3')).format).toBeUndefined()
+  })
 })
