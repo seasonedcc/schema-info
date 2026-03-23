@@ -173,6 +173,77 @@ describe('schemaInfo with Zod', () => {
     expect(info.enumValues).toEqual(['only'])
   })
 
+  it('handles union with null (nullable)', () => {
+    const info = schemaInfo(z.number().or(z.null()))
+    expect(info.type).toBe('number')
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(true)
+  })
+
+  it('handles union with null and optional', () => {
+    const info = schemaInfo(z.number().or(z.null()).optional())
+    expect(info.type).toBe('number')
+    expect(info.optional).toBe(true)
+    expect(info.nullable).toBe(true)
+  })
+
+  it('handles union with undefined (optional)', () => {
+    const info = schemaInfo(z.string().or(z.undefined()))
+    expect(info.type).toBe('string')
+    expect(info.optional).toBe(true)
+    expect(info.nullable).toBe(false)
+  })
+
+  it('handles nested union with null and undefined', () => {
+    const info = schemaInfo(z.number().or(z.null()).or(z.undefined()))
+    expect(info.type).toBe('number')
+    expect(info.optional).toBe(true)
+    expect(info.nullable).toBe(true)
+  })
+
+  it('handles z.union syntax', () => {
+    const info = schemaInfo(z.union([z.string(), z.null()]))
+    expect(info.type).toBe('string')
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(true)
+  })
+
+  it('handles union of string literals as enum', () => {
+    const info = schemaInfo(
+      z.literal('a').or(z.literal('b')).or(z.literal('c'))
+    )
+    expect(info.type).toBe('enum')
+    expect(info.enumValues).toEqual(['a', 'b', 'c'])
+  })
+
+  it('handles union of string literals with null as nullable enum', () => {
+    const info = schemaInfo(z.literal('x').or(z.literal('y')).or(z.null()))
+    expect(info.type).toBe('enum')
+    expect(info.nullable).toBe(true)
+    expect(info.enumValues).toEqual(['x', 'y'])
+  })
+
+  it('handles union of boolean literals as boolean', () => {
+    const info = schemaInfo(z.literal(true).or(z.literal(false)))
+    expect(info.type).toBe('boolean')
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(false)
+  })
+
+  it('handles union with default value', () => {
+    const info = schemaInfo(z.number().or(z.null()).default(42))
+    expect(info.type).toBe('number')
+    expect(info.nullable).toBe(true)
+    expect(info.getDefaultValue?.()).toBe(42)
+  })
+
+  it('returns null type for unsupported multi-type unions', () => {
+    const info = schemaInfo(z.string().or(z.number()))
+    expect(info.type).toBeNull()
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(false)
+  })
+
   it('handles deeply nested modifiers', () => {
     const schema = z
       .number()

@@ -121,6 +121,13 @@ describe('schemaFields with Zod', () => {
     const fields = schemaFields(schema)
     expect(fields?.name.type).toBe('string')
   })
+
+  it('extracts fields from object wrapped in union with null', () => {
+    const schema = z.object({ name: z.string(), age: z.number() }).or(z.null())
+    const fields = schemaFields(schema)
+    expect(fields?.name.type).toBe('string')
+    expect(fields?.age.type).toBe('number')
+  })
 })
 
 describe('schemaFields with Yup', () => {
