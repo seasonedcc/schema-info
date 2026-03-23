@@ -7,6 +7,7 @@ type ZodInternalDef = {
   out?: unknown
   defaultValue?: unknown
   values?: Iterable<unknown>
+  options?: unknown[]
   [key: string]: unknown
 }
 
@@ -35,6 +36,30 @@ function getZodValues(schema: unknown): Iterable<unknown> | null {
  */
 function isZodSchema(schema: unknown): boolean {
   return getZodDef(schema) !== null
+}
+
+function isZodBooleanLiteralUnion(schemas: unknown[]) {
+  if (schemas.length !== 2) return false
+  const values = schemas.map((s) => {
+    const d = getZodDef(s)
+    if (d?.type !== 'literal' || !d.values) return undefined
+    const vals = Array.from(d.values as Iterable<unknown>)
+    return vals.length === 1 ? vals[0] : undefined
+  })
+  return values.includes(true) && values.includes(false)
+}
+
+function flattenZodUnionOptions(options: unknown[]): unknown[] {
+  const result: unknown[] = []
+  for (const option of options) {
+    const def = getZodDef(option)
+    if (def?.type === 'union' && def.options) {
+      result.push(...flattenZodUnionOptions(def.options))
+    } else {
+      result.push(option)
+    }
+  }
+  return result
 }
 
 const typeMap: Record<string, FieldType> = {
@@ -108,6 +133,76 @@ function fromZod(
     )
   }
 
+  if (type === 'union' && def.options) {
+    const branches = flattenZodUnionOptions(def.options)
+    let isOptional = optional
+    let isNullable = nullable
+    const remaining: unknown[] = []
+
+    for (const option of branches) {
+      const optionDef = getZodDef(option)
+      if (optionDef?.type === 'null') {
+        isNullable = true
+      } else if (optionDef?.type === 'undefined') {
+        isOptional = true
+      } else {
+        remaining.push(option)
+      }
+    }
+
+    const allStringLiterals =
+      remaining.length > 0 &&
+      remaining.every((option) => {
+        const d = getZodDef(option)
+        if (d?.type !== 'literal' || !d.values) return false
+        const vals = Array.from(d.values as Iterable<unknown>)
+        return vals.length === 1 && typeof vals[0] === 'string'
+      })
+
+    if (allStringLiterals) {
+      const values = remaining.flatMap((option) => {
+        const d = getZodDef(option)
+        if (!d?.values) return []
+        return Array.from(d.values as Iterable<unknown>) as string[]
+      })
+      return {
+        type: 'enum',
+        optional: isOptional,
+        nullable: isNullable,
+        getDefaultValue,
+        enumValues: values,
+      }
+    }
+
+    if (isZodBooleanLiteralUnion(remaining)) {
+      return {
+        type: 'boolean',
+        optional: isOptional,
+        nullable: isNullable,
+        getDefaultValue,
+        enumValues,
+      }
+    }
+
+    if (remaining.length === 1) {
+      return fromZod(
+        remaining[0],
+        isOptional,
+        isNullable,
+        getDefaultValue,
+        enumValues
+      )
+    }
+
+    return {
+      type: null,
+      optional: isOptional,
+      nullable: isNullable,
+      getDefaultValue,
+      enumValues,
+    }
+  }
+
   if (type === 'enum') {
     const values = Array.from(getZodValues(schema) || []) as string[]
     return {
@@ -150,6 +245,17 @@ function getZodShape(schema: unknown): Record<string, unknown> | null {
     def.type === 'default'
   ) {
     return getZodShape(def.innerType)
+  }
+
+  if (def.type === 'union' && def.options) {
+    const branches = flattenZodUnionOptions(def.options)
+    for (const branch of branches) {
+      const branchDef = getZodDef(branch)
+      if (branchDef?.type === 'null' || branchDef?.type === 'undefined')
+        continue
+      const shape = getZodShape(branch)
+      if (shape) return shape
+    }
   }
 
   return null
