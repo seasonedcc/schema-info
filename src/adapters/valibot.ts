@@ -1,4 +1,9 @@
-import type { FieldType, SchemaInfo } from '../types'
+import type { FieldFormat, FieldType, SchemaInfo } from '../types'
+
+type ValibotPipeAction = {
+  kind: string
+  type: string
+}
 
 type ValibotInternalSchema = {
   kind: 'schema'
@@ -6,8 +11,29 @@ type ValibotInternalSchema = {
   wrapped?: ValibotInternalSchema
   default?: unknown
   options?: unknown[]
+  pipe?: ValibotPipeAction[]
   '~standard'?: { vendor?: string }
   [key: string]: unknown
+}
+
+const valibotFormatMap: Record<string, FieldFormat> = {
+  email: 'email',
+  url: 'url',
+  uuid: 'uuid',
+  cuid2: 'cuid2',
+  ulid: 'ulid',
+  emoji: 'emoji',
+  base64: 'base64',
+  nanoid: 'nanoid',
+  iso_date: 'date',
+  iso_date_time: 'datetime',
+  iso_time: 'time',
+  iso_timestamp: 'datetime',
+  iso_time_second: 'time',
+  iso_week: 'date',
+  ipv4: 'ipv4',
+  ipv6: 'ipv6',
+  ip: 'ip',
 }
 
 function asValibotSchema(schema: unknown): ValibotInternalSchema | null {
@@ -133,8 +159,19 @@ function fromValibot(
     }
   }
 
+  let format: FieldFormat | undefined
+  if (vSchema.pipe) {
+    for (const action of vSchema.pipe) {
+      if (action.kind === 'validation' && action.type in valibotFormatMap) {
+        format = valibotFormatMap[action.type]
+        break
+      }
+    }
+  }
+
   return {
     type: typeMap[type] ?? null,
+    ...(format && { format }),
     optional,
     nullable,
     getDefaultValue,

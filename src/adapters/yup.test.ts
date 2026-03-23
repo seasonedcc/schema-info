@@ -152,4 +152,36 @@ describe('schemaInfo with Yup', () => {
     expect(info.nullable).toBe(true)
     expect(info.getDefaultValue?.()).toEqual(testDate)
   })
+
+  it('extracts email format', () => {
+    expect(schemaInfo(yup.string().email().required())).toMatchObject({
+      type: 'string',
+      format: 'email',
+    })
+  })
+
+  it('extracts url format', () => {
+    expect(schemaInfo(yup.string().url().required())).toMatchObject({
+      type: 'string',
+      format: 'url',
+    })
+  })
+
+  it('extracts uuid format', () => {
+    expect(schemaInfo(yup.string().uuid().required())).toMatchObject({
+      type: 'string',
+      format: 'uuid',
+    })
+  })
+
+  it('extracts datetime format', () => {
+    expect(schemaInfo(yup.string().datetime().required())).toMatchObject({
+      type: 'string',
+      format: 'datetime',
+    })
+  })
+
+  it('does not set format on plain string', () => {
+    expect(schemaInfo(yup.string().required()).format).toBeUndefined()
+  })
 })

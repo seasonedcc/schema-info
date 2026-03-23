@@ -1,12 +1,27 @@
-import type { FieldType, SchemaInfo } from '../types'
+import type { FieldFormat, FieldType, SchemaInfo } from '../types'
 
 const JoiSymbol = Symbol.for('@hapi/joi/schema')
+
+type JoiRule = {
+  name: string
+}
 
 type JoiSchema = {
   type: string
   _flags: Record<string, unknown>
+  _rules: JoiRule[]
   _valids?: { _values?: Set<unknown> }
   [key: symbol]: unknown
+}
+
+const joiFormatMap: Record<string, FieldFormat> = {
+  email: 'email',
+  uri: 'url',
+  guid: 'uuid',
+  isoDate: 'datetime',
+  isoDuration: 'duration',
+  ip: 'ip',
+  base64: 'base64',
 }
 
 function asJoiSchema(schema: unknown): JoiSchema | null {
@@ -88,8 +103,17 @@ function fromJoi(schema: unknown): SchemaInfo {
     }
   }
 
+  let format: FieldFormat | undefined
+  for (const rule of joiSchema._rules) {
+    if (rule.name in joiFormatMap) {
+      format = joiFormatMap[rule.name]
+      break
+    }
+  }
+
   return {
     type: typeMap[joiSchema.type] ?? null,
+    ...(format && { format }),
     optional,
     nullable,
     getDefaultValue,

@@ -176,4 +176,161 @@ describe('schemaInfo with Valibot', () => {
     expect(info.nullable).toBe(true)
     expect(info.getDefaultValue?.()).toEqual(testDate)
   })
+
+  it('extracts email format', () => {
+    expect(schemaInfo(v.pipe(v.string(), v.email()))).toMatchObject({
+      type: 'string',
+      format: 'email',
+    })
+  })
+
+  it('extracts url format', () => {
+    expect(schemaInfo(v.pipe(v.string(), v.url()))).toMatchObject({
+      type: 'string',
+      format: 'url',
+    })
+  })
+
+  it('extracts uuid format', () => {
+    expect(schemaInfo(v.pipe(v.string(), v.uuid()))).toMatchObject({
+      type: 'string',
+      format: 'uuid',
+    })
+  })
+
+  it('extracts isoDate format', () => {
+    expect(schemaInfo(v.pipe(v.string(), v.isoDate()))).toMatchObject({
+      type: 'string',
+      format: 'date',
+    })
+  })
+
+  it('extracts isoDateTime format', () => {
+    expect(schemaInfo(v.pipe(v.string(), v.isoDateTime()))).toMatchObject({
+      type: 'string',
+      format: 'datetime',
+    })
+  })
+
+  it('extracts isoTime format', () => {
+    expect(schemaInfo(v.pipe(v.string(), v.isoTime()))).toMatchObject({
+      type: 'string',
+      format: 'time',
+    })
+  })
+
+  it('extracts isoTimestamp format', () => {
+    expect(schemaInfo(v.pipe(v.string(), v.isoTimestamp()))).toMatchObject({
+      type: 'string',
+      format: 'datetime',
+    })
+  })
+
+  it('extracts isoTimeSecond format', () => {
+    expect(schemaInfo(v.pipe(v.string(), v.isoTimeSecond()))).toMatchObject({
+      type: 'string',
+      format: 'time',
+    })
+  })
+
+  it('extracts isoWeek format', () => {
+    expect(schemaInfo(v.pipe(v.string(), v.isoWeek()))).toMatchObject({
+      type: 'string',
+      format: 'date',
+    })
+  })
+
+  it('extracts ipv4 format', () => {
+    expect(schemaInfo(v.pipe(v.string(), v.ipv4()))).toMatchObject({
+      type: 'string',
+      format: 'ipv4',
+    })
+  })
+
+  it('extracts ipv6 format', () => {
+    expect(schemaInfo(v.pipe(v.string(), v.ipv6()))).toMatchObject({
+      type: 'string',
+      format: 'ipv6',
+    })
+  })
+
+  it('extracts ip format', () => {
+    expect(schemaInfo(v.pipe(v.string(), v.ip()))).toMatchObject({
+      type: 'string',
+      format: 'ip',
+    })
+  })
+
+  it('extracts cuid2 format', () => {
+    expect(schemaInfo(v.pipe(v.string(), v.cuid2()))).toMatchObject({
+      type: 'string',
+      format: 'cuid2',
+    })
+  })
+
+  it('extracts ulid format', () => {
+    expect(schemaInfo(v.pipe(v.string(), v.ulid()))).toMatchObject({
+      type: 'string',
+      format: 'ulid',
+    })
+  })
+
+  it('extracts emoji format', () => {
+    expect(schemaInfo(v.pipe(v.string(), v.emoji()))).toMatchObject({
+      type: 'string',
+      format: 'emoji',
+    })
+  })
+
+  it('extracts base64 format', () => {
+    expect(schemaInfo(v.pipe(v.string(), v.base64()))).toMatchObject({
+      type: 'string',
+      format: 'base64',
+    })
+  })
+
+  it('extracts nanoid format', () => {
+    expect(schemaInfo(v.pipe(v.string(), v.nanoid()))).toMatchObject({
+      type: 'string',
+      format: 'nanoid',
+    })
+  })
+
+  it('preserves format through optional wrapper', () => {
+    const info = schemaInfo(v.optional(v.pipe(v.string(), v.email())))
+    expect(info).toMatchObject({
+      type: 'string',
+      format: 'email',
+      optional: true,
+    })
+  })
+
+  it('preserves format through nullable wrapper', () => {
+    const info = schemaInfo(v.nullable(v.pipe(v.string(), v.isoDate())))
+    expect(info).toMatchObject({
+      type: 'string',
+      format: 'date',
+      nullable: true,
+    })
+  })
+
+  it('preserves format through nullish wrapper', () => {
+    const info = schemaInfo(v.nullish(v.pipe(v.string(), v.url())))
+    expect(info).toMatchObject({
+      type: 'string',
+      format: 'url',
+      optional: true,
+      nullable: true,
+    })
+  })
+
+  it('does not set format on plain string', () => {
+    expect(schemaInfo(v.string()).format).toBeUndefined()
+  })
+
+  it('does not set format on piped string without format validation', () => {
+    expect(
+      schemaInfo(v.pipe(v.string(), v.minLength(3))).format
+    ).toBeUndefined()
+  })
 })
