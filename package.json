@@ -1,6 +1,6 @@
 {
   "name": "schema-info",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Universal schema introspection for TypeScript validation libraries",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
