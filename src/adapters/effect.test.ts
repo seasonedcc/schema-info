@@ -176,4 +176,12 @@ describe('schemaInfo with Effect Schema', () => {
   it('returns null for non-file instanceOf schemas', () => {
     expect(schemaInfo(S.instanceOf(RegExp)).type).toBeNull()
   })
+
+  it('unwraps refined file schemas', () => {
+    const schema = S.instanceOf(File).pipe(S.filter((f) => f.size <= 2_000_000))
+    const info = schemaInfo(schema)
+    expect(info.type).toBe('file')
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(false)
+  })
 })

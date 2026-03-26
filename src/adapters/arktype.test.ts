@@ -200,4 +200,15 @@ describe('schemaInfo with ArkType', () => {
     expect(info.type).toBe('file')
     expect(info.nullable).toBe(true)
   })
+
+  it('unwraps refined file schemas', () => {
+    const schema = type('File').narrow((f, ctx) => {
+      if (f.size > 2_000_000) return ctx.mustBe('under 2MB')
+      return true
+    })
+    const info = schemaInfo(schema)
+    expect(info.type).toBe('file')
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(false)
+  })
 })

@@ -35,6 +35,17 @@ function isFileOrBlobConstructor(cls: unknown): boolean {
   )
 }
 
+function isCustomFnFileCheck(fn: (data: unknown) => unknown): boolean {
+  try {
+    return (
+      (typeof File !== 'undefined' && fn(new File([], '')) === true) ||
+      (typeof Blob !== 'undefined' && fn(new Blob()) === true)
+    )
+  } catch {
+    return false
+  }
+}
+
 function getZodValues(schema: unknown): Iterable<unknown> | null {
   // biome-ignore lint/suspicious/noExplicitAny: Zod internal structure is not typed
   return (schema as any)?._zod?.values ?? null
@@ -274,7 +285,11 @@ function fromZod(
   if (type === 'custom') {
     // biome-ignore lint/suspicious/noExplicitAny: Zod internal structure is not typed
     const cls = (schema as any)?._zod?.bag?.Class
-    if (isFileOrBlobConstructor(cls)) {
+    if (
+      isFileOrBlobConstructor(cls) ||
+      (typeof def.fn === 'function' &&
+        isCustomFnFileCheck(def.fn as (data: unknown) => unknown))
+    ) {
       return {
         type: 'file',
         optional,

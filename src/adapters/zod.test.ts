@@ -480,4 +480,18 @@ describe('schemaInfo with Zod', () => {
   it('returns null for non-file instanceof schemas', () => {
     expect(schemaInfo(z.instanceof(RegExp)).type).toBeNull()
   })
+
+  it('unwraps refined file schemas', () => {
+    const schema = z
+      .instanceof(File)
+      .refine((f) => f.size <= 2_000_000, 'Max file size is 2MB')
+      .refine(
+        (f) => f.type.startsWith('image/'),
+        'Only image files are allowed'
+      )
+    const info = schemaInfo(schema)
+    expect(info.type).toBe('file')
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(false)
+  })
 })
