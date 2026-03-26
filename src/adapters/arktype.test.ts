@@ -172,4 +172,32 @@ describe('schemaInfo with ArkType', () => {
   it('does not set format on constrained string', () => {
     expect(schemaInfo(type('string > 3')).format).toBeUndefined()
   })
+
+  it('extracts file type from File', () => {
+    expect(schemaInfo(type('File'))).toEqual({
+      type: 'file',
+      optional: false,
+      nullable: false,
+    })
+  })
+
+  it('extracts file type from Blob', () => {
+    expect(schemaInfo(type('Blob'))).toEqual({
+      type: 'file',
+      optional: false,
+      nullable: false,
+    })
+  })
+
+  it('handles optional File', () => {
+    const info = schemaInfo(type('File | undefined'))
+    expect(info.type).toBe('file')
+    expect(info.optional).toBe(true)
+  })
+
+  it('handles nullable File', () => {
+    const info = schemaInfo(type('File | null'))
+    expect(info.type).toBe('file')
+    expect(info.nullable).toBe(true)
+  })
 })

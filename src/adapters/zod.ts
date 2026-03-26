@@ -28,6 +28,13 @@ function getZodFormat(schema: unknown): FieldFormat | undefined {
   return undefined
 }
 
+function isFileOrBlobConstructor(cls: unknown): boolean {
+  return (
+    (typeof File !== 'undefined' && cls === File) ||
+    (typeof Blob !== 'undefined' && cls === Blob)
+  )
+}
+
 function getZodValues(schema: unknown): Iterable<unknown> | null {
   // biome-ignore lint/suspicious/noExplicitAny: Zod internal structure is not typed
   return (schema as any)?._zod?.values ?? null
@@ -261,6 +268,20 @@ function fromZod(
       nullable,
       getDefaultValue,
       enumValues: values,
+    }
+  }
+
+  if (type === 'custom') {
+    // biome-ignore lint/suspicious/noExplicitAny: Zod internal structure is not typed
+    const cls = (schema as any)?._zod?.bag?.Class
+    if (isFileOrBlobConstructor(cls)) {
+      return {
+        type: 'file',
+        optional,
+        nullable,
+        getDefaultValue,
+        enumValues,
+      }
     }
   }
 

@@ -96,6 +96,26 @@ function fromYup(schema: unknown): SchemaInfo {
   const nullable = spec.nullable === true
   const getDefaultValue = 'default' in spec ? () => spec.default : undefined
 
+  if (type === 'mixed') {
+    // biome-ignore lint/suspicious/noExplicitAny: Yup internal structure
+    const typeCheck = (yupSchema as any)._typeCheck as
+      | ((v: unknown) => boolean)
+      | undefined
+    if (typeCheck && !typeCheck('')) {
+      const isFile =
+        (typeof File !== 'undefined' && typeCheck(new File([], ''))) ||
+        (typeof Blob !== 'undefined' && typeCheck(new Blob()))
+      if (isFile) {
+        return {
+          type: 'file',
+          optional,
+          nullable,
+          getDefaultValue,
+        }
+      }
+    }
+  }
+
   const enumValues = Array.from(yupSchema._whitelist) as string[]
   if (enumValues.length > 0) {
     return {

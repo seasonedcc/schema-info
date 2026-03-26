@@ -65,6 +65,13 @@ function isValibotSchema(schema: unknown): boolean {
   return asValibotSchema(schema) !== null
 }
 
+function isFileOrBlobConstructor(cls: unknown): boolean {
+  return (
+    (typeof File !== 'undefined' && cls === File) ||
+    (typeof Blob !== 'undefined' && cls === Blob)
+  )
+}
+
 const typeMap: Record<string, FieldType> = {
   string: 'string',
   number: 'number',
@@ -156,6 +163,20 @@ function fromValibot(
       nullable,
       getDefaultValue,
       enumValues: (vSchema.options ?? []) as string[],
+    }
+  }
+
+  if (type === 'instance') {
+    // biome-ignore lint/suspicious/noExplicitAny: Valibot uses 'class' as property name
+    const cls = (vSchema as any).class
+    if (isFileOrBlobConstructor(cls)) {
+      return {
+        type: 'file',
+        optional,
+        nullable,
+        getDefaultValue,
+        enumValues,
+      }
     }
   }
 

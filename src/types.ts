@@ -1,4 +1,4 @@
-type FieldType = 'string' | 'number' | 'boolean' | 'date' | 'enum'
+type FieldType = 'string' | 'number' | 'boolean' | 'date' | 'file' | 'enum'
 
 type FieldFormat =
   | 'date'

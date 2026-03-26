@@ -4,6 +4,7 @@ const JoiSymbol = Symbol.for('@hapi/joi/schema')
 
 type JoiRule = {
   name: string
+  args?: Record<string, unknown>
 }
 
 type JoiSchema = {
@@ -87,6 +88,23 @@ function fromJoi(schema: unknown): SchemaInfo {
   const nullable = valids?.has(null) === true
   const getDefaultValue =
     'default' in joiSchema._flags ? () => joiSchema._flags.default : undefined
+
+  for (const rule of joiSchema._rules) {
+    if (rule.name === 'instance') {
+      const ctor = rule.args?.constructor
+      if (
+        (typeof File !== 'undefined' && ctor === File) ||
+        (typeof Blob !== 'undefined' && ctor === Blob)
+      ) {
+        return {
+          type: 'file',
+          optional,
+          nullable,
+          getDefaultValue,
+        }
+      }
+    }
+  }
 
   if (joiSchema._flags.only === true && valids && valids.size > 0) {
     const enumValues = [...valids].filter(
