@@ -35,11 +35,13 @@ const fields = schemaFields(z.object({
   name: z.string(),
   age: z.number().optional(),
   role: z.enum(['admin', 'user']),
+  avatar: z.instanceof(File),
 }))
 // {
 //   name: { type: 'string', optional: false, nullable: false },
 //   age: { type: 'number', optional: true, nullable: false },
 //   role: { type: 'enum', optional: false, nullable: false, enumValues: ['admin', 'user'] },
+//   avatar: { type: 'file', optional: false, nullable: false },
 // }
 ```
 
@@ -118,6 +120,9 @@ schemaInfo(z.string().default('hello'))
 
 schemaInfo(z.enum(['a', 'b', 'c']))
 // { type: 'enum', optional: false, nullable: false, enumValues: ['a', 'b', 'c'] }
+
+schemaInfo(z.instanceof(File))
+// { type: 'file', optional: false, nullable: false }
 ```
 
 ## Supported Libraries
@@ -131,11 +136,26 @@ schemaInfo(z.enum(['a', 'b', 'c']))
 | [Effect Schema](https://effect.website/docs/schema) | 3.x | `Symbol.for('effect/Schema')` |
 | [Joi](https://joi.dev) | 18.x | `Symbol.for('@hapi/joi/schema')` |
 
+## File Type Detection
+
+File and Blob instance schemas are detected as `{ type: 'file' }`, including through refinements:
+
+| Library | Expression |
+| --- | --- |
+| Zod | `z.instanceof(File)` |
+| Valibot | `v.instance(File)` |
+| ArkType | `type('File')` |
+| Effect Schema | `Schema.instanceOf(File)` |
+| Joi | `Joi.object().instance(File)` |
+| Yup | `yup.mixed((input): input is File => input instanceof File)` |
+
+`Blob` is also detected as `'file'` in all libraries. Non-file instance checks (e.g., `z.instanceof(RegExp)`) return `{ type: null }`.
+
 ## What Gets Extracted
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `type` | `FieldType \| null` | `'string'`, `'number'`, `'boolean'`, `'date'`, `'enum'`, or `null` for unsupported types |
+| `type` | `FieldType \| null` | `'string'`, `'number'`, `'boolean'`, `'date'`, `'file'`, `'enum'`, or `null` for unsupported types |
 | `optional` | `boolean` | Whether the field accepts `undefined` |
 | `nullable` | `boolean` | Whether the field accepts `null` |
 | `getDefaultValue` | `(() => unknown) \| undefined` | A function that returns the default value, if one is set |
@@ -149,7 +169,7 @@ All types are exported for use in your own code:
 import type { SchemaInfo, FieldType } from 'schema-info'
 ```
 
-**`FieldType`** — `'string' | 'number' | 'boolean' | 'date' | 'enum'`
+**`FieldType`** — `'string' | 'number' | 'boolean' | 'date' | 'file' | 'enum'`
 
 **`SchemaInfo`** — The universal output type:
 

@@ -226,4 +226,15 @@ describe('schemaInfo with Joi', () => {
   it('returns null for non-file instance schemas', () => {
     expect(schemaInfo(Joi.object().instance(RegExp)).type).toBeNull()
   })
+
+  it('unwraps refined file schemas', () => {
+    const schema = Joi.object()
+      .instance(File)
+      .custom((value) => {
+        if (value.size > 2_000_000) throw new Error('Max file size is 2MB')
+        return value
+      })
+    const info = schemaInfo(schema)
+    expect(info.type).toBe('file')
+  })
 })

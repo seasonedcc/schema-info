@@ -221,4 +221,16 @@ describe('schemaInfo with Yup', () => {
     )
     expect(info.type).toBeNull()
   })
+
+  it('unwraps refined file schemas', () => {
+    const schema = yup
+      .mixed((input): input is File => input instanceof File)
+      .test(
+        'fileSize',
+        'Max file size is 2MB',
+        (v) => !v || v.size <= 2_000_000
+      )
+    const info = schemaInfo(schema)
+    expect(info.type).toBe('file')
+  })
 })

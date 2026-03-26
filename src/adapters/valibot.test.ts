@@ -364,4 +364,19 @@ describe('schemaInfo with Valibot', () => {
   it('returns null for non-file instance schemas', () => {
     expect(schemaInfo(v.instance(RegExp)).type).toBeNull()
   })
+
+  it('unwraps refined file schemas', () => {
+    const schema = v.pipe(
+      v.instance(File),
+      v.check((f) => f.size <= 2_000_000, 'Max file size is 2MB'),
+      v.check(
+        (f) => f.type.startsWith('image/'),
+        'Only image files are allowed'
+      )
+    )
+    const info = schemaInfo(schema)
+    expect(info.type).toBe('file')
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(false)
+  })
 })
