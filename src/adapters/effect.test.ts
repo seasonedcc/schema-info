@@ -146,4 +146,34 @@ describe('schemaInfo with Effect Schema', () => {
   it('does not set format on Date (type is already date)', () => {
     expect(schemaInfo(S.Date).format).toBeUndefined()
   })
+
+  it('extracts file type from S.instanceOf(File)', () => {
+    const info = schemaInfo(S.instanceOf(File))
+    expect(info.type).toBe('file')
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(false)
+  })
+
+  it('extracts file type from S.instanceOf(Blob)', () => {
+    const info = schemaInfo(S.instanceOf(Blob))
+    expect(info.type).toBe('file')
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(false)
+  })
+
+  it('handles nullable file type', () => {
+    const info = schemaInfo(S.NullOr(S.instanceOf(File)))
+    expect(info.type).toBe('file')
+    expect(info.nullable).toBe(true)
+  })
+
+  it('handles optional file type', () => {
+    const info = schemaInfo(S.UndefinedOr(S.instanceOf(File)))
+    expect(info.type).toBe('file')
+    expect(info.optional).toBe(true)
+  })
+
+  it('returns null for non-file instanceOf schemas', () => {
+    expect(schemaInfo(S.instanceOf(RegExp)).type).toBeNull()
+  })
 })

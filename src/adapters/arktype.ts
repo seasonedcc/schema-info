@@ -129,8 +129,15 @@ function extractFromNode(node: ArkTypeNode): SchemaInfo {
   }
 
   if (kind === 'proto') {
+    let protoType: FieldType | null = null
+    if (inner.proto === Date) protoType = 'date'
+    else if (
+      (typeof File !== 'undefined' && inner.proto === File) ||
+      (typeof Blob !== 'undefined' && inner.proto === Blob)
+    )
+      protoType = 'file'
     return {
-      type: inner.proto === Date ? 'date' : null,
+      type: protoType,
       optional: false,
       nullable: false,
     }

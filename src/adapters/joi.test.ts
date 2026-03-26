@@ -201,4 +201,29 @@ describe('schemaInfo with Joi', () => {
   it('does not set format on plain string', () => {
     expect(schemaInfo(Joi.string()).format).toBeUndefined()
   })
+
+  it('extracts file type from Joi.object().instance(File)', () => {
+    const info = schemaInfo(Joi.object().instance(File).required())
+    expect(info.type).toBe('file')
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(false)
+  })
+
+  it('extracts file type from Joi.object().instance(Blob)', () => {
+    const info = schemaInfo(Joi.object().instance(Blob).required())
+    expect(info.type).toBe('file')
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(false)
+  })
+
+  it('handles file type with optional and nullable modifiers', () => {
+    const info = schemaInfo(Joi.object().instance(File).allow(null))
+    expect(info.type).toBe('file')
+    expect(info.optional).toBe(true)
+    expect(info.nullable).toBe(true)
+  })
+
+  it('returns null for non-file instance schemas', () => {
+    expect(schemaInfo(Joi.object().instance(RegExp)).type).toBeNull()
+  })
 })

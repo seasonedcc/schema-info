@@ -333,4 +333,35 @@ describe('schemaInfo with Valibot', () => {
       schemaInfo(v.pipe(v.string(), v.minLength(3))).format
     ).toBeUndefined()
   })
+
+  it('extracts file type from v.instance(File)', () => {
+    expect(schemaInfo(v.instance(File))).toEqual({
+      type: 'file',
+      optional: false,
+      nullable: false,
+      getDefaultValue: undefined,
+      enumValues: undefined,
+    })
+  })
+
+  it('extracts file type from v.instance(Blob)', () => {
+    expect(schemaInfo(v.instance(Blob))).toEqual({
+      type: 'file',
+      optional: false,
+      nullable: false,
+      getDefaultValue: undefined,
+      enumValues: undefined,
+    })
+  })
+
+  it('handles file type with optional and nullable modifiers', () => {
+    const info = schemaInfo(v.optional(v.nullable(v.instance(File))))
+    expect(info.type).toBe('file')
+    expect(info.optional).toBe(true)
+    expect(info.nullable).toBe(true)
+  })
+
+  it('returns null for non-file instance schemas', () => {
+    expect(schemaInfo(v.instance(RegExp)).type).toBeNull()
+  })
 })

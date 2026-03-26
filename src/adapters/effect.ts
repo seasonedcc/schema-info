@@ -57,6 +57,18 @@ function isDateAST(ast: EffectAST): boolean {
   return id === 'Date' || id === 'DateFromSelf'
 }
 
+const InstanceOfSchemaId = Symbol.for('effect/SchemaId/InstanceOf')
+
+function isFileAST(ast: EffectAST): boolean {
+  // biome-ignore lint/suspicious/noExplicitAny: Effect internal structure
+  const instanceOf = ast.annotations?.[InstanceOfSchemaId] as any
+  const ctor = instanceOf?.constructor
+  return (
+    (typeof File !== 'undefined' && ctor === File) ||
+    (typeof Blob !== 'undefined' && ctor === Blob)
+  )
+}
+
 const effectFormatMap: Record<string, FieldFormat> = {
   UUID: 'uuid',
   ULID: 'ulid',
@@ -105,6 +117,10 @@ function extractFromAST(
     isDateAST(ast)
   ) {
     return { type: 'date', optional, nullable }
+  }
+
+  if (_tag === 'Declaration' && isFileAST(ast)) {
+    return { type: 'file', optional, nullable }
   }
 
   const identifier = getIdentifier(ast)

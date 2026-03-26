@@ -449,4 +449,35 @@ describe('schemaInfo with Zod', () => {
   it('does not set format on z.date()', () => {
     expect(schemaInfo(z.date()).format).toBeUndefined()
   })
+
+  it('extracts file type from z.instanceof(File)', () => {
+    expect(schemaInfo(z.instanceof(File))).toEqual({
+      type: 'file',
+      optional: false,
+      nullable: false,
+      getDefaultValue: undefined,
+      enumValues: undefined,
+    })
+  })
+
+  it('extracts file type from z.instanceof(Blob)', () => {
+    expect(schemaInfo(z.instanceof(Blob))).toEqual({
+      type: 'file',
+      optional: false,
+      nullable: false,
+      getDefaultValue: undefined,
+      enumValues: undefined,
+    })
+  })
+
+  it('handles file type with optional and nullable modifiers', () => {
+    const info = schemaInfo(z.instanceof(File).optional().nullable())
+    expect(info.type).toBe('file')
+    expect(info.optional).toBe(true)
+    expect(info.nullable).toBe(true)
+  })
+
+  it('returns null for non-file instanceof schemas', () => {
+    expect(schemaInfo(z.instanceof(RegExp)).type).toBeNull()
+  })
 })

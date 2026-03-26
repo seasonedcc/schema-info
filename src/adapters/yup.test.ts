@@ -184,4 +184,41 @@ describe('schemaInfo with Yup', () => {
   it('does not set format on plain string', () => {
     expect(schemaInfo(yup.string().required()).format).toBeUndefined()
   })
+
+  it('extracts file type from mixed() with File type check', () => {
+    const info = schemaInfo(
+      yup.mixed((input): input is File => input instanceof File)
+    )
+    expect(info.type).toBe('file')
+    expect(info.optional).toBe(true)
+    expect(info.nullable).toBe(false)
+  })
+
+  it('extracts file type from mixed() with Blob type check', () => {
+    const info = schemaInfo(
+      yup.mixed((input): input is Blob => input instanceof Blob)
+    )
+    expect(info.type).toBe('file')
+    expect(info.optional).toBe(true)
+    expect(info.nullable).toBe(false)
+  })
+
+  it('handles file type with required and nullable modifiers', () => {
+    const info = schemaInfo(
+      yup
+        .mixed((input): input is File => input instanceof File)
+        .required()
+        .nullable()
+    )
+    expect(info.type).toBe('file')
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(true)
+  })
+
+  it('returns null for non-file mixed schemas', () => {
+    const info = schemaInfo(
+      yup.mixed((input): input is RegExp => input instanceof RegExp)
+    )
+    expect(info.type).toBeNull()
+  })
 })
