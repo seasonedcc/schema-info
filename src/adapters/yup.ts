@@ -1,4 +1,4 @@
-import type { FieldFormat, FieldType, SchemaInfo } from '../types'
+import type { FieldFormat, ScalarFieldType, SchemaInfo } from '../types'
 
 type YupSpec = {
   optional?: boolean
@@ -57,13 +57,11 @@ function isYupSchema(schema: unknown): boolean {
   return asYupSchema(schema) !== null
 }
 
-const typeMap: Record<string, FieldType> = {
+const typeMap: Record<string, ScalarFieldType> = {
   string: 'string',
   number: 'number',
   boolean: 'boolean',
   date: 'date',
-  array: 'array',
-  object: 'object',
 }
 
 /**
@@ -86,7 +84,10 @@ const typeMap: Record<string, FieldType> = {
  * // { type: 'string', optional: false, nullable: false }
  * ```
  */
-function fromYup(schema: unknown): SchemaInfo {
+function fromYup(
+  schema: unknown,
+  recurse: (s: unknown) => SchemaInfo
+): SchemaInfo {
   const yupSchema = asYupSchema(schema)
 
   if (!yupSchema) {
@@ -129,6 +130,31 @@ function fromYup(schema: unknown): SchemaInfo {
     }
   }
 
+  if (type === 'array') {
+    // biome-ignore lint/suspicious/noExplicitAny: Yup internal structure
+    const innerType = (schema as any).innerType
+    if (!innerType) return { type: null, optional, nullable, getDefaultValue }
+    return {
+      type: 'array',
+      item: recurse(innerType),
+      optional,
+      nullable,
+      getDefaultValue,
+    }
+  }
+
+  if (type === 'object') {
+    // biome-ignore lint/suspicious/noExplicitAny: Yup internal structure
+    const rawFields = (schema as any)?.fields
+    const fields: Record<string, SchemaInfo> = {}
+    if (rawFields && typeof rawFields === 'object') {
+      for (const key of Object.keys(rawFields)) {
+        fields[key] = recurse(rawFields[key])
+      }
+    }
+    return { type: 'object', fields, optional, nullable, getDefaultValue }
+  }
+
   let format: FieldFormat | undefined
   for (const test of yupSchema.tests) {
     const name = test.OPTIONS?.name
@@ -163,11 +189,4 @@ function extractYupFields(schema: unknown): Record<string, unknown> | null {
   return fields
 }
 
-function extractYupArrayItem(schema: unknown): unknown | null {
-  const yupSchema = asYupSchema(schema)
-  if (!yupSchema || yupSchema.type !== 'array') return null
-  // biome-ignore lint/suspicious/noExplicitAny: Yup internal structure
-  return (schema as any).innerType ?? null
-}
-
-export { isYupSchema, fromYup, extractYupFields, extractYupArrayItem }
+export { isYupSchema, fromYup, extractYupFields }

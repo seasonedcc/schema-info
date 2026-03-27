@@ -1,6 +1,7 @@
 import Joi from 'joi'
 import { describe, expect, it } from 'vitest'
 import { schemaInfo } from '../schema-info'
+import type { ArraySchemaInfo, ObjectSchemaInfo } from '../types'
 
 describe('schemaInfo with Joi', () => {
   it('extracts info from string type', () => {
@@ -123,17 +124,19 @@ describe('schemaInfo with Joi', () => {
   })
 
   it('extracts info from object type', () => {
-    const info = schemaInfo(Joi.object({ name: Joi.string() }))
+    const info = schemaInfo(
+      Joi.object({ name: Joi.string() })
+    ) as ObjectSchemaInfo
     expect(info.type).toBe('object')
     expect(info.optional).toBe(true)
-    expect(info.fields?.name.type).toBe('string')
+    expect(info.fields.name.type).toBe('string')
   })
 
   it('extracts info from array type', () => {
-    const info = schemaInfo(Joi.array().items(Joi.string()))
+    const info = schemaInfo(Joi.array().items(Joi.string())) as ArraySchemaInfo
     expect(info.type).toBe('array')
     expect(info.optional).toBe(true)
-    expect(info.item?.type).toBe('string')
+    expect(info.item.type).toBe('string')
   })
 
   it('handles number with required and default', () => {
@@ -240,16 +243,16 @@ describe('schemaInfo with Joi', () => {
   })
 
   it('extracts array of strings', () => {
-    const info = schemaInfo(Joi.array().items(Joi.string()))
+    const info = schemaInfo(Joi.array().items(Joi.string())) as ArraySchemaInfo
     expect(info.type).toBe('array')
     expect(info.optional).toBe(true)
-    expect(info.item?.type).toBe('string')
+    expect(info.item.type).toBe('string')
   })
 
   it('extracts array of numbers', () => {
-    const info = schemaInfo(Joi.array().items(Joi.number()))
+    const info = schemaInfo(Joi.array().items(Joi.number())) as ArraySchemaInfo
     expect(info.type).toBe('array')
-    expect(info.item?.type).toBe('number')
+    expect(info.item.type).toBe('number')
   })
 
   it('extracts array of objects', () => {
@@ -257,38 +260,44 @@ describe('schemaInfo with Joi', () => {
       Joi.array().items(
         Joi.object({ street: Joi.string(), city: Joi.string() })
       )
-    )
+    ) as ArraySchemaInfo
     expect(info.type).toBe('array')
-    expect(info.item?.type).toBe('object')
-    expect(info.item?.fields?.street.type).toBe('string')
-    expect(info.item?.fields?.city.type).toBe('string')
+    expect(info.item.type).toBe('object')
+    const itemInfo = info.item as ObjectSchemaInfo
+    expect(itemInfo.fields.street.type).toBe('string')
+    expect(itemInfo.fields.city.type).toBe('string')
   })
 
   it('extracts nested arrays', () => {
-    const info = schemaInfo(Joi.array().items(Joi.array().items(Joi.number())))
+    const info = schemaInfo(
+      Joi.array().items(Joi.array().items(Joi.number()))
+    ) as ArraySchemaInfo
     expect(info.type).toBe('array')
-    expect(info.item?.type).toBe('array')
-    expect(info.item?.item?.type).toBe('number')
+    expect(info.item.type).toBe('array')
+    expect((info.item as ArraySchemaInfo).item.type).toBe('number')
   })
 
   it('handles array without item type', () => {
     const info = schemaInfo(Joi.array())
-    expect(info.type).toBe('array')
-    expect(info.item).toBeUndefined()
+    expect(info.type).toBeNull()
   })
 
   it('handles required array', () => {
-    const info = schemaInfo(Joi.array().items(Joi.string()).required())
+    const info = schemaInfo(
+      Joi.array().items(Joi.string()).required()
+    ) as ArraySchemaInfo
     expect(info.type).toBe('array')
     expect(info.optional).toBe(false)
-    expect(info.item?.type).toBe('string')
+    expect(info.item.type).toBe('string')
   })
 
   it('handles nullable array', () => {
-    const info = schemaInfo(Joi.array().items(Joi.string()).allow(null))
+    const info = schemaInfo(
+      Joi.array().items(Joi.string()).allow(null)
+    ) as ArraySchemaInfo
     expect(info.type).toBe('array')
     expect(info.nullable).toBe(true)
-    expect(info.item?.type).toBe('string')
+    expect(info.item.type).toBe('string')
   })
 
   it('handles array with default value', () => {
@@ -302,27 +311,30 @@ describe('schemaInfo with Joi', () => {
       Joi.object({
         billing: Joi.object({ street: Joi.string(), city: Joi.string() }),
       })
-    )
+    ) as ObjectSchemaInfo
     expect(info.type).toBe('object')
-    expect(info.fields?.billing.type).toBe('object')
-    expect(info.fields?.billing.fields?.street.type).toBe('string')
-    expect(info.fields?.billing.fields?.city.type).toBe('string')
+    expect(info.fields.billing.type).toBe('object')
+    const billingInfo = info.fields.billing as ObjectSchemaInfo
+    expect(billingInfo.fields.street.type).toBe('string')
+    expect(billingInfo.fields.city.type).toBe('string')
   })
 
   it('extracts object with array field', () => {
     const info = schemaInfo(
       Joi.object({ tags: Joi.array().items(Joi.string()) })
-    )
+    ) as ObjectSchemaInfo
     expect(info.type).toBe('object')
-    expect(info.fields?.tags.type).toBe('array')
-    expect(info.fields?.tags.item?.type).toBe('string')
+    expect(info.fields.tags.type).toBe('array')
+    expect((info.fields.tags as ArraySchemaInfo).item.type).toBe('string')
   })
 
   it('handles required object', () => {
-    const info = schemaInfo(Joi.object({ name: Joi.string() }).required())
+    const info = schemaInfo(
+      Joi.object({ name: Joi.string() }).required()
+    ) as ObjectSchemaInfo
     expect(info.type).toBe('object')
     expect(info.optional).toBe(false)
-    expect(info.fields?.name.type).toBe('string')
+    expect(info.fields.name.type).toBe('string')
   })
 
   it('handles deep nesting: object → array → object', () => {
@@ -335,12 +347,15 @@ describe('schemaInfo with Joi', () => {
           })
         ),
       })
-    )
+    ) as ObjectSchemaInfo
+    const addressesInfo = info.fields.addresses as ArraySchemaInfo
+    const addressItemInfo = addressesInfo.item as ObjectSchemaInfo
+    const tagsInfo = addressItemInfo.fields.tags as ArraySchemaInfo
     expect(info.type).toBe('object')
-    expect(info.fields?.addresses.type).toBe('array')
-    expect(info.fields?.addresses.item?.type).toBe('object')
-    expect(info.fields?.addresses.item?.fields?.street.type).toBe('string')
-    expect(info.fields?.addresses.item?.fields?.tags.type).toBe('array')
-    expect(info.fields?.addresses.item?.fields?.tags.item?.type).toBe('string')
+    expect(addressesInfo.type).toBe('array')
+    expect(addressItemInfo.type).toBe('object')
+    expect(addressItemInfo.fields.street.type).toBe('string')
+    expect(tagsInfo.type).toBe('array')
+    expect(tagsInfo.item.type).toBe('string')
   })
 })

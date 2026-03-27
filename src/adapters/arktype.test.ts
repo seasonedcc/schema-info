@@ -1,6 +1,7 @@
 import { type } from 'arktype'
 import { describe, expect, it } from 'vitest'
 import { schemaInfo } from '../schema-info'
+import type { ArraySchemaInfo, ObjectSchemaInfo } from '../types'
 
 describe('schemaInfo with ArkType', () => {
   it('extracts info from string type', () => {
@@ -116,10 +117,10 @@ describe('schemaInfo with ArkType', () => {
   })
 
   it('extracts info from object type', () => {
-    const info = schemaInfo(type({ name: 'string' }))
+    const info = schemaInfo(type({ name: 'string' })) as ObjectSchemaInfo
     expect(info.type).toBe('object')
     expect(info.optional).toBe(false)
-    expect(info.fields?.name.type).toBe('string')
+    expect(info.fields.name.type).toBe('string')
   })
 
   it('handles number with optional and nullable', () => {
@@ -212,51 +213,51 @@ describe('schemaInfo with ArkType', () => {
   })
 
   it('extracts array of strings', () => {
-    const info = schemaInfo(type('string[]'))
+    const info = schemaInfo(type('string[]')) as ArraySchemaInfo
     expect(info.type).toBe('array')
     expect(info.optional).toBe(false)
     expect(info.nullable).toBe(false)
-    expect(info.item?.type).toBe('string')
+    expect(info.item.type).toBe('string')
   })
 
   it('extracts array of numbers', () => {
-    const info = schemaInfo(type('number[]'))
+    const info = schemaInfo(type('number[]')) as ArraySchemaInfo
     expect(info.type).toBe('array')
-    expect(info.item?.type).toBe('number')
+    expect(info.item.type).toBe('number')
   })
 
   it('extracts array of dates', () => {
-    const info = schemaInfo(type('Date[]'))
+    const info = schemaInfo(type('Date[]')) as ArraySchemaInfo
     expect(info.type).toBe('array')
-    expect(info.item?.type).toBe('date')
+    expect(info.item.type).toBe('date')
   })
 
   it('extracts array of objects', () => {
-    const info = schemaInfo(type({ name: 'string' }).array())
+    const info = schemaInfo(type({ name: 'string' }).array()) as ArraySchemaInfo
     expect(info.type).toBe('array')
-    expect(info.item?.type).toBe('object')
-    expect(info.item?.fields?.name.type).toBe('string')
+    expect(info.item.type).toBe('object')
+    expect((info.item as ObjectSchemaInfo).fields.name.type).toBe('string')
   })
 
   it('extracts nested arrays', () => {
-    const info = schemaInfo(type('number[][]'))
+    const info = schemaInfo(type('number[][]')) as ArraySchemaInfo
     expect(info.type).toBe('array')
-    expect(info.item?.type).toBe('array')
-    expect(info.item?.item?.type).toBe('number')
+    expect(info.item.type).toBe('array')
+    expect((info.item as ArraySchemaInfo).item.type).toBe('number')
   })
 
   it('handles optional array', () => {
-    const info = schemaInfo(type('string[] | undefined'))
+    const info = schemaInfo(type('string[] | undefined')) as ArraySchemaInfo
     expect(info.type).toBe('array')
     expect(info.optional).toBe(true)
-    expect(info.item?.type).toBe('string')
+    expect(info.item.type).toBe('string')
   })
 
   it('handles nullable array', () => {
-    const info = schemaInfo(type('string[] | null'))
+    const info = schemaInfo(type('string[] | null')) as ArraySchemaInfo
     expect(info.type).toBe('array')
     expect(info.nullable).toBe(true)
-    expect(info.item?.type).toBe('string')
+    expect(info.item.type).toBe('string')
   })
 
   it('extracts object with nested object', () => {
@@ -264,25 +265,26 @@ describe('schemaInfo with ArkType', () => {
       type({
         billing: { street: 'string', city: 'string' },
       })
-    )
+    ) as ObjectSchemaInfo
     expect(info.type).toBe('object')
-    expect(info.fields?.billing.type).toBe('object')
-    expect(info.fields?.billing.fields?.street.type).toBe('string')
-    expect(info.fields?.billing.fields?.city.type).toBe('string')
+    expect(info.fields.billing.type).toBe('object')
+    const billing = info.fields.billing as ObjectSchemaInfo
+    expect(billing.fields.street.type).toBe('string')
+    expect(billing.fields.city.type).toBe('string')
   })
 
   it('extracts object with array field', () => {
-    const info = schemaInfo(type({ tags: 'string[]' }))
+    const info = schemaInfo(type({ tags: 'string[]' })) as ObjectSchemaInfo
     expect(info.type).toBe('object')
-    expect(info.fields?.tags.type).toBe('array')
-    expect(info.fields?.tags.item?.type).toBe('string')
+    expect(info.fields.tags.type).toBe('array')
+    expect((info.fields.tags as ArraySchemaInfo).item.type).toBe('string')
   })
 
   it('handles optional object field', () => {
-    const info = schemaInfo(type({ 'name?': 'string' }))
+    const info = schemaInfo(type({ 'name?': 'string' })) as ObjectSchemaInfo
     expect(info.type).toBe('object')
-    expect(info.fields?.name.type).toBe('string')
-    expect(info.fields?.name.optional).toBe(true)
+    expect(info.fields.name.type).toBe('string')
+    expect(info.fields.name.optional).toBe(true)
   })
 
   it('handles deep nesting: object → array → object', () => {
@@ -290,12 +292,16 @@ describe('schemaInfo with ArkType', () => {
       type({
         addresses: type({ street: 'string', tags: 'string[]' }).array(),
       })
-    )
+    ) as ObjectSchemaInfo
+    const addresses = info.fields.addresses as ArraySchemaInfo
+    const addressItem = addresses.item as ObjectSchemaInfo
     expect(info.type).toBe('object')
-    expect(info.fields?.addresses.type).toBe('array')
-    expect(info.fields?.addresses.item?.type).toBe('object')
-    expect(info.fields?.addresses.item?.fields?.street.type).toBe('string')
-    expect(info.fields?.addresses.item?.fields?.tags.type).toBe('array')
-    expect(info.fields?.addresses.item?.fields?.tags.item?.type).toBe('string')
+    expect(addresses.type).toBe('array')
+    expect(addressItem.type).toBe('object')
+    expect(addressItem.fields.street.type).toBe('string')
+    expect(addressItem.fields.tags.type).toBe('array')
+    expect((addressItem.fields.tags as ArraySchemaInfo).item.type).toBe(
+      'string'
+    )
   })
 })

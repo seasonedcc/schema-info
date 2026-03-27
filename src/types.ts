@@ -1,12 +1,12 @@
-type FieldType =
+type ScalarFieldType =
   | 'string'
   | 'number'
   | 'boolean'
   | 'date'
   | 'file'
   | 'enum'
-  | 'array'
-  | 'object'
+
+type FieldType = ScalarFieldType | 'array' | 'object'
 
 type FieldFormat =
   | 'date'
@@ -47,16 +47,36 @@ const fieldFormatValues: Set<string> = new Set([
   'ipv6',
 ])
 
-type SchemaInfo = {
-  type: FieldType | null
+type BaseSchemaInfo = {
   format?: FieldFormat
   optional: boolean
   nullable: boolean
   getDefaultValue?: () => unknown
   enumValues?: string[]
-  item?: SchemaInfo
-  fields?: Record<string, SchemaInfo>
 }
 
+type ScalarSchemaInfo = BaseSchemaInfo & {
+  type: ScalarFieldType | null
+}
+
+type ArraySchemaInfo = BaseSchemaInfo & {
+  type: 'array'
+  item: SchemaInfo
+}
+
+type ObjectSchemaInfo = BaseSchemaInfo & {
+  type: 'object'
+  fields: Record<string, SchemaInfo>
+}
+
+type SchemaInfo = ScalarSchemaInfo | ArraySchemaInfo | ObjectSchemaInfo
+
 export { fieldFormatValues }
-export type { FieldType, FieldFormat, SchemaInfo }
+export type {
+  ScalarFieldType,
+  FieldType,
+  FieldFormat,
+  SchemaInfo,
+  ArraySchemaInfo,
+  ObjectSchemaInfo,
+}

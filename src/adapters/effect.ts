@@ -1,4 +1,4 @@
-import type { FieldFormat, FieldType, SchemaInfo } from '../types'
+import type { FieldFormat, ScalarFieldType, SchemaInfo } from '../types'
 
 const TypeId = Symbol.for('effect/Schema')
 const IdentifierAnnotationId = Symbol.for('effect/annotation/Identifier')
@@ -77,7 +77,7 @@ const effectFormatMap: Record<string, FieldFormat> = {
   DateTimeUtc: 'datetime',
 }
 
-const tagMap: Record<string, FieldType> = {
+const tagMap: Record<string, ScalarFieldType> = {
   StringKeyword: 'string',
   NumberKeyword: 'number',
   BooleanKeyword: 'boolean',
@@ -150,22 +150,25 @@ function extractFromAST(
   }
 
   if (_tag === 'TupleType') {
-    const info: SchemaInfo = { type: 'array', optional, nullable }
-    if (ast.rest && ast.rest.length > 0) {
-      info.item = extractFromAST(ast.rest[0].type)
+    return {
+      type: 'array',
+      item:
+        ast.rest && ast.rest.length > 0
+          ? extractFromAST(ast.rest[0].type)
+          : { type: null, optional: false, nullable: false },
+      optional,
+      nullable,
     }
-    return info
   }
 
   if (_tag === 'TypeLiteral') {
-    const info: SchemaInfo = { type: 'object', optional, nullable }
-    if (ast.propertySignatures && ast.propertySignatures.length > 0) {
-      info.fields = {}
+    const fields: Record<string, SchemaInfo> = {}
+    if (ast.propertySignatures) {
       for (const sig of ast.propertySignatures) {
-        info.fields[String(sig.name)] = extractFromAST(sig.type, sig.isOptional)
+        fields[String(sig.name)] = extractFromAST(sig.type, sig.isOptional)
       }
     }
-    return info
+    return { type: 'object', fields, optional, nullable }
   }
 
   return { type: null, optional, nullable }

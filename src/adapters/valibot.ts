@@ -1,4 +1,4 @@
-import type { FieldFormat, FieldType, SchemaInfo } from '../types'
+import type { FieldFormat, ScalarFieldType, SchemaInfo } from '../types'
 
 type ValibotPipeAction = {
   kind: string
@@ -72,13 +72,11 @@ function isFileOrBlobConstructor(cls: unknown): boolean {
   )
 }
 
-const typeMap: Record<string, FieldType> = {
+const typeMap: Record<string, ScalarFieldType> = {
   string: 'string',
   number: 'number',
   boolean: 'boolean',
   date: 'date',
-  array: 'array',
-  object: 'object',
 }
 
 function extractDefault(
@@ -115,6 +113,7 @@ function extractDefault(
  */
 function fromValibot(
   schema: unknown,
+  recurse: (s: unknown) => SchemaInfo,
   optional = false,
   nullable = false,
   getDefaultValue?: SchemaInfo['getDefaultValue'],
@@ -131,6 +130,7 @@ function fromValibot(
   if (type === 'optional') {
     return fromValibot(
       vSchema.wrapped,
+      recurse,
       true,
       nullable,
       extractDefault(vSchema, getDefaultValue),
@@ -141,6 +141,7 @@ function fromValibot(
   if (type === 'nullable') {
     return fromValibot(
       vSchema.wrapped,
+      recurse,
       optional,
       true,
       extractDefault(vSchema, getDefaultValue),
@@ -151,6 +152,7 @@ function fromValibot(
   if (type === 'nullish') {
     return fromValibot(
       vSchema.wrapped,
+      recurse,
       true,
       true,
       extractDefault(vSchema, getDefaultValue),
@@ -179,6 +181,36 @@ function fromValibot(
         getDefaultValue,
         enumValues,
       }
+    }
+  }
+
+  if (type === 'array') {
+    const item = vSchema.item
+    if (!item)
+      return { type: null, optional, nullable, getDefaultValue, enumValues }
+    return {
+      type: 'array',
+      item: recurse(item),
+      optional,
+      nullable,
+      getDefaultValue,
+      enumValues,
+    }
+  }
+
+  if (type === 'object' && vSchema.entries) {
+    const entries = vSchema.entries as Record<string, unknown>
+    const fields: Record<string, SchemaInfo> = {}
+    for (const key of Object.keys(entries)) {
+      fields[key] = recurse(entries[key])
+    }
+    return {
+      type: 'object',
+      fields,
+      optional,
+      nullable,
+      getDefaultValue,
+      enumValues,
     }
   }
 
@@ -232,29 +264,4 @@ function extractValibotFields(schema: unknown): Record<string, unknown> | null {
   return null
 }
 
-function extractValibotArrayItem(schema: unknown): unknown | null {
-  const vSchema = asValibotSchema(schema)
-  if (!vSchema) return null
-
-  if (vSchema.type === 'array') {
-    return vSchema.item ?? null
-  }
-
-  if (
-    (vSchema.type === 'optional' ||
-      vSchema.type === 'nullable' ||
-      vSchema.type === 'nullish') &&
-    vSchema.wrapped
-  ) {
-    return extractValibotArrayItem(vSchema.wrapped)
-  }
-
-  return null
-}
-
-export {
-  isValibotSchema,
-  fromValibot,
-  extractValibotFields,
-  extractValibotArrayItem,
-}
+export { isValibotSchema, fromValibot, extractValibotFields }

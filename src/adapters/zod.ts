@@ -1,4 +1,5 @@
-import type { FieldFormat, FieldType, SchemaInfo } from '../types'
+import type { FieldFormat, SchemaInfo } from '../types'
+import type { ScalarFieldType } from '../types'
 import { fieldFormatValues } from '../types'
 
 type ZodInternalDef = {
@@ -92,14 +93,12 @@ function flattenZodUnionOptions(options: unknown[]): unknown[] {
   return result
 }
 
-const typeMap: Record<string, FieldType> = {
+const typeMap: Record<string, ScalarFieldType> = {
   string: 'string',
   number: 'number',
   boolean: 'boolean',
   date: 'date',
   enum: 'enum',
-  array: 'array',
-  object: 'object',
 }
 
 /**
@@ -126,6 +125,7 @@ const typeMap: Record<string, FieldType> = {
  */
 function fromZod(
   schema: unknown,
+  recurse: (s: unknown) => SchemaInfo,
   optional = false,
   nullable = false,
   getDefaultValue?: SchemaInfo['getDefaultValue'],
@@ -161,6 +161,7 @@ function fromZod(
   if (type === 'pipe') {
     return fromZod(
       def.in,
+      recurse,
       optional,
       nullable,
       getDefaultValue,
@@ -172,6 +173,7 @@ function fromZod(
   if (type === 'optional') {
     return fromZod(
       def.innerType,
+      recurse,
       true,
       nullable,
       getDefaultValue,
@@ -183,6 +185,7 @@ function fromZod(
   if (type === 'nullable') {
     return fromZod(
       def.innerType,
+      recurse,
       optional,
       true,
       getDefaultValue,
@@ -194,6 +197,7 @@ function fromZod(
   if (type === 'default') {
     return fromZod(
       def.innerType,
+      recurse,
       optional,
       nullable,
       () => def.defaultValue,
@@ -256,6 +260,7 @@ function fromZod(
     if (remaining.length === 1) {
       return fromZod(
         remaining[0],
+        recurse,
         isOptional,
         isNullable,
         getDefaultValue,
@@ -299,6 +304,40 @@ function fromZod(
         getDefaultValue,
         enumValues,
       }
+    }
+  }
+
+  if (type === 'array') {
+    const resolvedFormat = format ?? getZodFormat(schema)
+    return {
+      type: 'array',
+      item: recurse(def.element),
+      ...(resolvedFormat && { format: resolvedFormat }),
+      optional,
+      nullable,
+      getDefaultValue,
+      enumValues,
+    }
+  }
+
+  if (type === 'object') {
+    // biome-ignore lint/suspicious/noExplicitAny: Zod internal structure is not typed
+    const shape = (schema as any)?.shape as Record<string, unknown> | undefined
+    const fields: Record<string, SchemaInfo> = {}
+    if (shape) {
+      for (const key of Object.keys(shape)) {
+        fields[key] = recurse(shape[key])
+      }
+    }
+    const resolvedFormat = format ?? getZodFormat(schema)
+    return {
+      type: 'object',
+      fields,
+      ...(resolvedFormat && { format: resolvedFormat }),
+      optional,
+      nullable,
+      getDefaultValue,
+      enumValues,
     }
   }
 
@@ -366,44 +405,4 @@ function extractZodFields(schema: unknown): Record<string, unknown> | null {
   return getZodShape(schema)
 }
 
-function getZodArrayElement(schema: unknown): unknown | null {
-  const def = getZodDef(schema)
-  if (!def) return null
-
-  if (def.type === 'array') {
-    return def.element ?? null
-  }
-
-  if (def.type === 'pipe') {
-    return getZodArrayElement(def.in) ?? getZodArrayElement(def.out)
-  }
-
-  if (
-    def.type === 'readonly' ||
-    def.type === 'optional' ||
-    def.type === 'nullable' ||
-    def.type === 'default'
-  ) {
-    return getZodArrayElement(def.innerType)
-  }
-
-  if (def.type === 'union' && def.options) {
-    const branches = flattenZodUnionOptions(def.options)
-    for (const branch of branches) {
-      const branchDef = getZodDef(branch)
-      if (branchDef?.type === 'null' || branchDef?.type === 'undefined')
-        continue
-      const element = getZodArrayElement(branch)
-      if (element) return element
-    }
-  }
-
-  return null
-}
-
-function extractZodArrayItem(schema: unknown): unknown | null {
-  if (!isZodSchema(schema)) return null
-  return getZodArrayElement(schema)
-}
-
-export { isZodSchema, fromZod, extractZodFields, extractZodArrayItem }
+export { isZodSchema, fromZod, extractZodFields }

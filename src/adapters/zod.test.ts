@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
 import { schemaInfo } from '../schema-info'
+import type { ArraySchemaInfo, ObjectSchemaInfo } from '../types'
 
 describe('schemaInfo with Zod', () => {
   it('extracts info from primitive schemas', () => {
@@ -138,11 +139,11 @@ describe('schemaInfo with Zod', () => {
 
   it('extracts info from object type', () => {
     const schema = z.object({ field: z.string() })
-    const info = schemaInfo(schema)
+    const info = schemaInfo(schema) as ObjectSchemaInfo
     expect(info.type).toBe('object')
     expect(info.optional).toBe(false)
     expect(info.nullable).toBe(false)
-    expect(info.fields?.field.type).toBe('string')
+    expect(info.fields.field.type).toBe('string')
   })
 
   it('handles nullable followed by optional', () => {
@@ -493,89 +494,85 @@ describe('schemaInfo with Zod', () => {
   })
 
   it('extracts array of strings', () => {
-    const info = schemaInfo(z.array(z.string()))
+    const info = schemaInfo(z.array(z.string())) as ArraySchemaInfo
     expect(info.type).toBe('array')
     expect(info.optional).toBe(false)
     expect(info.nullable).toBe(false)
-    expect(info.item?.type).toBe('string')
+    expect(info.item.type).toBe('string')
   })
 
   it('extracts array of numbers', () => {
-    const info = schemaInfo(z.array(z.number()))
-    expect(info.type).toBe('array')
-    expect(info.item?.type).toBe('number')
+    const info = schemaInfo(z.array(z.number())) as ArraySchemaInfo
+    expect(info.item.type).toBe('number')
   })
 
   it('extracts array of booleans', () => {
-    const info = schemaInfo(z.array(z.boolean()))
-    expect(info.type).toBe('array')
-    expect(info.item?.type).toBe('boolean')
+    const info = schemaInfo(z.array(z.boolean())) as ArraySchemaInfo
+    expect(info.item.type).toBe('boolean')
   })
 
   it('extracts array of dates', () => {
-    const info = schemaInfo(z.array(z.date()))
-    expect(info.type).toBe('array')
-    expect(info.item?.type).toBe('date')
+    const info = schemaInfo(z.array(z.date())) as ArraySchemaInfo
+    expect(info.item.type).toBe('date')
   })
 
   it('extracts array of enums', () => {
-    const info = schemaInfo(z.array(z.enum(['a', 'b'])))
-    expect(info.type).toBe('array')
-    expect(info.item?.type).toBe('enum')
-    expect(info.item?.enumValues).toEqual(['a', 'b'])
+    const info = schemaInfo(z.array(z.enum(['a', 'b']))) as ArraySchemaInfo
+    expect(info.item.type).toBe('enum')
+    expect(info.item.enumValues).toEqual(['a', 'b'])
   })
 
   it('extracts array of files', () => {
-    const info = schemaInfo(z.array(z.instanceof(File)))
-    expect(info.type).toBe('array')
-    expect(info.item?.type).toBe('file')
+    const info = schemaInfo(z.array(z.instanceof(File))) as ArraySchemaInfo
+    expect(info.item.type).toBe('file')
   })
 
   it('extracts array of objects', () => {
     const info = schemaInfo(
       z.array(z.object({ street: z.string(), city: z.string() }))
-    )
-    expect(info.type).toBe('array')
-    expect(info.item?.type).toBe('object')
-    expect(info.item?.fields?.street.type).toBe('string')
-    expect(info.item?.fields?.city.type).toBe('string')
+    ) as ArraySchemaInfo
+    expect(info.item.type).toBe('object')
+    const itemObj = info.item as ObjectSchemaInfo
+    expect(itemObj.fields.street.type).toBe('string')
+    expect(itemObj.fields.city.type).toBe('string')
   })
 
   it('extracts nested arrays', () => {
-    const info = schemaInfo(z.array(z.array(z.number())))
-    expect(info.type).toBe('array')
-    expect(info.item?.type).toBe('array')
-    expect(info.item?.item?.type).toBe('number')
+    const info = schemaInfo(z.array(z.array(z.number()))) as ArraySchemaInfo
+    expect(info.item.type).toBe('array')
+    expect((info.item as ArraySchemaInfo).item.type).toBe('number')
   })
 
   it('handles optional array', () => {
-    const info = schemaInfo(z.array(z.string()).optional())
+    const info = schemaInfo(z.array(z.string()).optional()) as ArraySchemaInfo
     expect(info.type).toBe('array')
     expect(info.optional).toBe(true)
-    expect(info.item?.type).toBe('string')
+    expect(info.item.type).toBe('string')
   })
 
   it('handles nullable array', () => {
-    const info = schemaInfo(z.array(z.string()).nullable())
+    const info = schemaInfo(z.array(z.string()).nullable()) as ArraySchemaInfo
     expect(info.type).toBe('array')
     expect(info.nullable).toBe(true)
-    expect(info.item?.type).toBe('string')
+    expect(info.item.type).toBe('string')
   })
 
   it('handles array with default value', () => {
-    const info = schemaInfo(z.array(z.string()).default(['a']))
+    const info = schemaInfo(
+      z.array(z.string()).default(['a'])
+    ) as ArraySchemaInfo
     expect(info.type).toBe('array')
     expect(info.getDefaultValue?.()).toEqual(['a'])
-    expect(info.item?.type).toBe('string')
+    expect(info.item.type).toBe('string')
   })
 
   it('handles array inside pipe', () => {
     const schema = z
       .array(z.string())
       .pipe(z.array(z.string()).transform((v) => v))
-    const info = schemaInfo(schema)
+    const info = schemaInfo(schema) as ArraySchemaInfo
     expect(info.type).toBe('array')
-    expect(info.item?.type).toBe('string')
+    expect(info.item.type).toBe('string')
   })
 
   it('extracts object with nested object', () => {
@@ -583,32 +580,38 @@ describe('schemaInfo with Zod', () => {
       z.object({
         billing: z.object({ street: z.string(), city: z.string() }),
       })
-    )
-    expect(info.type).toBe('object')
-    expect(info.fields?.billing.type).toBe('object')
-    expect(info.fields?.billing.fields?.street.type).toBe('string')
-    expect(info.fields?.billing.fields?.city.type).toBe('string')
+    ) as ObjectSchemaInfo
+    const billing = info.fields.billing as ObjectSchemaInfo
+    expect(billing.type).toBe('object')
+    expect(billing.fields.street.type).toBe('string')
+    expect(billing.fields.city.type).toBe('string')
   })
 
   it('extracts object with array field', () => {
-    const info = schemaInfo(z.object({ tags: z.array(z.string()) }))
-    expect(info.type).toBe('object')
-    expect(info.fields?.tags.type).toBe('array')
-    expect(info.fields?.tags.item?.type).toBe('string')
+    const info = schemaInfo(
+      z.object({ tags: z.array(z.string()) })
+    ) as ObjectSchemaInfo
+    const tags = info.fields.tags as ArraySchemaInfo
+    expect(tags.type).toBe('array')
+    expect(tags.item.type).toBe('string')
   })
 
   it('handles optional object', () => {
-    const info = schemaInfo(z.object({ name: z.string() }).optional())
+    const info = schemaInfo(
+      z.object({ name: z.string() }).optional()
+    ) as ObjectSchemaInfo
     expect(info.type).toBe('object')
     expect(info.optional).toBe(true)
-    expect(info.fields?.name.type).toBe('string')
+    expect(info.fields.name.type).toBe('string')
   })
 
   it('handles nullable object', () => {
-    const info = schemaInfo(z.object({ name: z.string() }).nullable())
+    const info = schemaInfo(
+      z.object({ name: z.string() }).nullable()
+    ) as ObjectSchemaInfo
     expect(info.type).toBe('object')
     expect(info.nullable).toBe(true)
-    expect(info.fields?.name.type).toBe('string')
+    expect(info.fields.name.type).toBe('string')
   })
 
   it('handles deep nesting: object → array → object', () => {
@@ -621,12 +624,14 @@ describe('schemaInfo with Zod', () => {
           })
         ),
       })
-    )
-    expect(info.type).toBe('object')
-    expect(info.fields?.addresses.type).toBe('array')
-    expect(info.fields?.addresses.item?.type).toBe('object')
-    expect(info.fields?.addresses.item?.fields?.street.type).toBe('string')
-    expect(info.fields?.addresses.item?.fields?.tags.type).toBe('array')
-    expect(info.fields?.addresses.item?.fields?.tags.item?.type).toBe('string')
+    ) as ObjectSchemaInfo
+    const addresses = info.fields.addresses as ArraySchemaInfo
+    expect(addresses.type).toBe('array')
+    const addrItem = addresses.item as ObjectSchemaInfo
+    expect(addrItem.type).toBe('object')
+    expect(addrItem.fields.street.type).toBe('string')
+    const tags = addrItem.fields.tags as ArraySchemaInfo
+    expect(tags.type).toBe('array')
+    expect(tags.item.type).toBe('string')
   })
 })

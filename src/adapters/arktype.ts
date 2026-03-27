@@ -1,4 +1,4 @@
-import type { FieldFormat, FieldType, SchemaInfo } from '../types'
+import type { FieldFormat, ScalarFieldType, SchemaInfo } from '../types'
 import { fieldFormatValues } from '../types'
 
 type ArkTypeNode = {
@@ -54,7 +54,7 @@ function isArkTypeSchema(schema: unknown): boolean {
   return asArkTypeSchema(schema) !== null
 }
 
-const domainMap: Record<string, FieldType> = {
+const domainMap: Record<string, ScalarFieldType> = {
   string: 'string',
   number: 'number',
 }
@@ -129,7 +129,7 @@ function extractFromNode(node: ArkTypeNode): SchemaInfo {
   }
 
   if (kind === 'proto') {
-    let protoType: FieldType | null = null
+    let protoType: ScalarFieldType | null = null
     if (inner.proto === Date) protoType = 'date'
     else if (
       (typeof File !== 'undefined' && inner.proto === File) ||
@@ -147,7 +147,11 @@ function extractFromNode(node: ArkTypeNode): SchemaInfo {
     const format = resolveArkFormat(node.meta)
     const info = extractFromBranches((inner.branches as ArkTypeNode[]) ?? [])
     if (format) {
-      return { ...info, format, type: info.type ?? 'string' }
+      return {
+        ...info,
+        format,
+        type: info.type ?? 'string',
+      } as SchemaInfo
     }
     return info
   }
@@ -157,50 +161,47 @@ function extractFromNode(node: ArkTypeNode): SchemaInfo {
     if (inner.proto) {
       const protoNode = inner.proto as ArkTypeNode
       if (protoNode.inner.proto === Array) {
-        const info: SchemaInfo = {
+        const structure = inner.structure as ArkTypeNode | undefined
+        const seqNode = structure?.inner?.sequence as ArkTypeNode | undefined
+        const variadicNode = seqNode?.inner?.variadic as ArkTypeNode | undefined
+        return {
           type: 'array',
+          item: variadicNode
+            ? extractFromNode(variadicNode)
+            : { type: null, optional: false, nullable: false },
           ...(format && { format }),
           optional: false,
           nullable: false,
         }
-        const structure = inner.structure as ArkTypeNode | undefined
-        const seqNode = structure?.inner?.sequence as ArkTypeNode | undefined
-        const variadicNode = seqNode?.inner?.variadic as ArkTypeNode | undefined
-        if (variadicNode) {
-          info.item = extractFromNode(variadicNode)
-        }
-        return info
       }
       return extractFromNode(protoNode)
     }
     if (inner.domain) {
       const domainNode = inner.domain as ArkTypeNode
       if ((domainNode.inner.domain as string) === 'object' && inner.structure) {
-        const info: SchemaInfo = {
+        const structure = inner.structure as ArkTypeNode
+        const required = (structure.inner.required ?? []) as ArkTypeNode[]
+        const optionalProps = (structure.inner.optional ?? []) as ArkTypeNode[]
+        const fields: Record<string, SchemaInfo> = {}
+        for (const prop of required) {
+          fields[prop.inner.key as string] = extractFromNode(
+            prop.inner.value as ArkTypeNode
+          )
+        }
+        for (const prop of optionalProps) {
+          const fieldInfo = extractFromNode(prop.inner.value as ArkTypeNode)
+          fields[prop.inner.key as string] = {
+            ...fieldInfo,
+            optional: true,
+          }
+        }
+        return {
           type: 'object',
+          fields,
           ...(format && { format }),
           optional: false,
           nullable: false,
         }
-        const structure = inner.structure as ArkTypeNode
-        const required = (structure.inner.required ?? []) as ArkTypeNode[]
-        const optionalProps = (structure.inner.optional ?? []) as ArkTypeNode[]
-        if (required.length > 0 || optionalProps.length > 0) {
-          info.fields = {}
-          for (const prop of required) {
-            info.fields[prop.inner.key as string] = extractFromNode(
-              prop.inner.value as ArkTypeNode
-            )
-          }
-          for (const prop of optionalProps) {
-            const fieldInfo = extractFromNode(prop.inner.value as ArkTypeNode)
-            info.fields[prop.inner.key as string] = {
-              ...fieldInfo,
-              optional: true,
-            }
-          }
-        }
-        return info
       }
       const info = extractFromNode(domainNode)
       return { ...info, ...(format && { format }) }

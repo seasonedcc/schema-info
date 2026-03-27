@@ -7,6 +7,7 @@ import * as yup from 'yup'
 import * as z from 'zod'
 import { schemaFields } from './schema-fields'
 import { SchemaFieldsError } from './schema-fields-error'
+import type { ArraySchemaInfo, ObjectSchemaInfo } from './types'
 
 describe('schemaFields', () => {
   it('throws unrecognized for undefined', () => {
@@ -390,10 +391,12 @@ describe('schemaFields with Joi', () => {
       })
     )
     expect(fields.billing.type).toBe('object')
-    expect(fields.billing.fields?.street.type).toBe('string')
-    expect(fields.billing.fields?.city.type).toBe('string')
+    expect((fields.billing as ObjectSchemaInfo).fields.street.type).toBe(
+      'string'
+    )
+    expect((fields.billing as ObjectSchemaInfo).fields.city.type).toBe('string')
     expect(fields.tags.type).toBe('array')
-    expect(fields.tags.item?.type).toBe('string')
+    expect((fields.tags as ArraySchemaInfo).item.type).toBe('string')
   })
 
   it('recursively populates nested object fields (Yup)', () => {
@@ -404,9 +407,11 @@ describe('schemaFields with Joi', () => {
       })
     )
     expect(fields.billing.type).toBe('object')
-    expect(fields.billing.fields?.street.type).toBe('string')
+    expect((fields.billing as ObjectSchemaInfo).fields.street.type).toBe(
+      'string'
+    )
     expect(fields.tags.type).toBe('array')
-    expect(fields.tags.item?.type).toBe('string')
+    expect((fields.tags as ArraySchemaInfo).item.type).toBe('string')
   })
 
   it('recursively populates nested object fields (Valibot)', () => {
@@ -417,9 +422,11 @@ describe('schemaFields with Joi', () => {
       })
     )
     expect(fields.billing.type).toBe('object')
-    expect(fields.billing.fields?.street.type).toBe('string')
+    expect((fields.billing as ObjectSchemaInfo).fields.street.type).toBe(
+      'string'
+    )
     expect(fields.tags.type).toBe('array')
-    expect(fields.tags.item?.type).toBe('string')
+    expect((fields.tags as ArraySchemaInfo).item.type).toBe('string')
   })
 
   it('recursively populates nested object fields (ArkType)', () => {
@@ -430,9 +437,11 @@ describe('schemaFields with Joi', () => {
       })
     )
     expect(fields.billing.type).toBe('object')
-    expect(fields.billing.fields?.street.type).toBe('string')
+    expect((fields.billing as ObjectSchemaInfo).fields.street.type).toBe(
+      'string'
+    )
     expect(fields.tags.type).toBe('array')
-    expect(fields.tags.item?.type).toBe('string')
+    expect((fields.tags as ArraySchemaInfo).item.type).toBe('string')
   })
 
   it('recursively populates nested object fields (Effect)', () => {
@@ -443,9 +452,11 @@ describe('schemaFields with Joi', () => {
       })
     )
     expect(fields.billing.type).toBe('object')
-    expect(fields.billing.fields?.street.type).toBe('string')
+    expect((fields.billing as ObjectSchemaInfo).fields.street.type).toBe(
+      'string'
+    )
     expect(fields.tags.type).toBe('array')
-    expect(fields.tags.item?.type).toBe('string')
+    expect((fields.tags as ArraySchemaInfo).item.type).toBe('string')
   })
 
   it('recursively populates nested object fields (Joi)', () => {
@@ -456,9 +467,11 @@ describe('schemaFields with Joi', () => {
       })
     )
     expect(fields.billing.type).toBe('object')
-    expect(fields.billing.fields?.street.type).toBe('string')
+    expect((fields.billing as ObjectSchemaInfo).fields.street.type).toBe(
+      'string'
+    )
     expect(fields.tags.type).toBe('array')
-    expect(fields.tags.item?.type).toBe('string')
+    expect((fields.tags as ArraySchemaInfo).item.type).toBe('string')
   })
 
   it('handles deep nesting through schemaFields (Zod)', () => {
@@ -473,9 +486,11 @@ describe('schemaFields with Joi', () => {
       })
     )
     expect(fields.addresses.type).toBe('array')
-    expect(fields.addresses.item?.type).toBe('object')
-    expect(fields.addresses.item?.fields?.street.type).toBe('string')
-    expect(fields.addresses.item?.fields?.tags.type).toBe('array')
-    expect(fields.addresses.item?.fields?.tags.item?.type).toBe('string')
+    const addressItem = (fields.addresses as ArraySchemaInfo).item
+    expect(addressItem.type).toBe('object')
+    const addressFields = (addressItem as ObjectSchemaInfo).fields
+    expect(addressFields.street.type).toBe('string')
+    expect(addressFields.tags.type).toBe('array')
+    expect((addressFields.tags as ArraySchemaInfo).item.type).toBe('string')
   })
 })
