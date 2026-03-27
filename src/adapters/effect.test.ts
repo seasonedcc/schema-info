@@ -110,12 +110,11 @@ describe('schemaInfo with Effect Schema', () => {
     expect(info.optional).toBe(true)
   })
 
-  it('returns null for unsupported types', () => {
-    expect(schemaInfo(S.Struct({ name: S.String }))).toEqual({
-      type: null,
-      optional: false,
-      nullable: false,
-    })
+  it('extracts info from object type', () => {
+    const info = schemaInfo(S.Struct({ name: S.String }))
+    expect(info.type).toBe('object')
+    expect(info.optional).toBe(false)
+    expect(info.fields?.name.type).toBe('string')
   })
 
   it('extracts uuid format', () => {
@@ -183,5 +182,110 @@ describe('schemaInfo with Effect Schema', () => {
     expect(info.type).toBe('file')
     expect(info.optional).toBe(false)
     expect(info.nullable).toBe(false)
+  })
+
+  it('extracts array of strings', () => {
+    const info = schemaInfo(S.Array(S.String))
+    expect(info.type).toBe('array')
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(false)
+    expect(info.item?.type).toBe('string')
+  })
+
+  it('extracts array of numbers', () => {
+    const info = schemaInfo(S.Array(S.Number))
+    expect(info.type).toBe('array')
+    expect(info.item?.type).toBe('number')
+  })
+
+  it('extracts array of enums', () => {
+    const info = schemaInfo(S.Array(S.Literal('a', 'b')))
+    expect(info.type).toBe('array')
+    expect(info.item?.type).toBe('enum')
+    expect(info.item?.enumValues).toEqual(['a', 'b'])
+  })
+
+  it('extracts array of objects', () => {
+    const info = schemaInfo(
+      S.Array(S.Struct({ street: S.String, city: S.String }))
+    )
+    expect(info.type).toBe('array')
+    expect(info.item?.type).toBe('object')
+    expect(info.item?.fields?.street.type).toBe('string')
+    expect(info.item?.fields?.city.type).toBe('string')
+  })
+
+  it('extracts nested arrays', () => {
+    const info = schemaInfo(S.Array(S.Array(S.Number)))
+    expect(info.type).toBe('array')
+    expect(info.item?.type).toBe('array')
+    expect(info.item?.item?.type).toBe('number')
+  })
+
+  it('handles optional array', () => {
+    const info = schemaInfo(S.optional(S.Array(S.String)))
+    expect(info.type).toBe('array')
+    expect(info.optional).toBe(true)
+    expect(info.item?.type).toBe('string')
+  })
+
+  it('handles nullable array', () => {
+    const info = schemaInfo(S.NullOr(S.Array(S.String)))
+    expect(info.type).toBe('array')
+    expect(info.nullable).toBe(true)
+    expect(info.item?.type).toBe('string')
+  })
+
+  it('handles array with pipe filter', () => {
+    const info = schemaInfo(
+      S.Array(S.String).pipe(S.filter((arr) => arr.length > 0))
+    )
+    expect(info.type).toBe('array')
+    expect(info.item?.type).toBe('string')
+  })
+
+  it('extracts object with nested object', () => {
+    const info = schemaInfo(
+      S.Struct({
+        billing: S.Struct({ street: S.String, city: S.String }),
+      })
+    )
+    expect(info.type).toBe('object')
+    expect(info.fields?.billing.type).toBe('object')
+    expect(info.fields?.billing.fields?.street.type).toBe('string')
+    expect(info.fields?.billing.fields?.city.type).toBe('string')
+  })
+
+  it('extracts object with array field', () => {
+    const info = schemaInfo(S.Struct({ tags: S.Array(S.String) }))
+    expect(info.type).toBe('object')
+    expect(info.fields?.tags.type).toBe('array')
+    expect(info.fields?.tags.item?.type).toBe('string')
+  })
+
+  it('handles optional object', () => {
+    const info = schemaInfo(S.optional(S.Struct({ name: S.String })))
+    expect(info.type).toBe('object')
+    expect(info.optional).toBe(true)
+    expect(info.fields?.name.type).toBe('string')
+  })
+
+  it('handles deep nesting: object → array → object', () => {
+    const info = schemaInfo(
+      S.Struct({
+        addresses: S.Array(
+          S.Struct({
+            street: S.String,
+            tags: S.Array(S.String),
+          })
+        ),
+      })
+    )
+    expect(info.type).toBe('object')
+    expect(info.fields?.addresses.type).toBe('array')
+    expect(info.fields?.addresses.item?.type).toBe('object')
+    expect(info.fields?.addresses.item?.fields?.street.type).toBe('string')
+    expect(info.fields?.addresses.item?.fields?.tags.type).toBe('array')
+    expect(info.fields?.addresses.item?.fields?.tags.item?.type).toBe('string')
   })
 })

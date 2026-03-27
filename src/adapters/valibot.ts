@@ -77,6 +77,8 @@ const typeMap: Record<string, FieldType> = {
   number: 'number',
   boolean: 'boolean',
   date: 'date',
+  array: 'array',
+  object: 'object',
 }
 
 function extractDefault(
@@ -230,4 +232,29 @@ function extractValibotFields(schema: unknown): Record<string, unknown> | null {
   return null
 }
 
-export { isValibotSchema, fromValibot, extractValibotFields }
+function extractValibotArrayItem(schema: unknown): unknown | null {
+  const vSchema = asValibotSchema(schema)
+  if (!vSchema) return null
+
+  if (vSchema.type === 'array') {
+    return vSchema.item ?? null
+  }
+
+  if (
+    (vSchema.type === 'optional' ||
+      vSchema.type === 'nullable' ||
+      vSchema.type === 'nullish') &&
+    vSchema.wrapped
+  ) {
+    return extractValibotArrayItem(vSchema.wrapped)
+  }
+
+  return null
+}
+
+export {
+  isValibotSchema,
+  fromValibot,
+  extractValibotFields,
+  extractValibotArrayItem,
+}

@@ -55,6 +55,8 @@ const typeMap: Record<string, FieldType> = {
   number: 'number',
   boolean: 'boolean',
   date: 'date',
+  array: 'array',
+  object: 'object',
 }
 
 /**
@@ -103,6 +105,7 @@ function fromJoi(schema: unknown): SchemaInfo {
           getDefaultValue,
         }
       }
+      return { type: null, optional, nullable, getDefaultValue }
     }
   }
 
@@ -162,4 +165,12 @@ function extractJoiFields(schema: unknown): Record<string, unknown> | null {
   return result
 }
 
-export { isJoiSchema, fromJoi, extractJoiFields }
+function extractJoiArrayItem(schema: unknown): unknown | null {
+  const joiSchema = asJoiSchema(schema)
+  if (!joiSchema || joiSchema.type !== 'array') return null
+  // biome-ignore lint/suspicious/noExplicitAny: Joi internal structure
+  const items = (schema as any)?.$_terms?.items as unknown[] | undefined
+  return Array.isArray(items) && items.length > 0 ? items[0] : null
+}
+
+export { isJoiSchema, fromJoi, extractJoiFields, extractJoiArrayItem }

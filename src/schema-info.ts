@@ -1,12 +1,56 @@
 import { fromArkType, isArkTypeSchema } from './adapters/arktype'
 import { fromEffect, isEffectSchema } from './adapters/effect'
-import { fromJoi, isJoiSchema } from './adapters/joi'
-import { fromValibot, isValibotSchema } from './adapters/valibot'
-import { fromYup, isYupSchema } from './adapters/yup'
-import { fromZod, isZodSchema } from './adapters/zod'
+import {
+  extractJoiArrayItem,
+  extractJoiFields,
+  fromJoi,
+  isJoiSchema,
+} from './adapters/joi'
+import {
+  extractValibotArrayItem,
+  extractValibotFields,
+  fromValibot,
+  isValibotSchema,
+} from './adapters/valibot'
+import {
+  extractYupArrayItem,
+  extractYupFields,
+  fromYup,
+  isYupSchema,
+} from './adapters/yup'
+import {
+  extractZodArrayItem,
+  extractZodFields,
+  fromZod,
+  isZodSchema,
+} from './adapters/zod'
 import type { SchemaInfo } from './types'
 
 const empty: SchemaInfo = { type: null, optional: false, nullable: false }
+
+function enrichWithRecursion(
+  info: SchemaInfo,
+  schema: unknown,
+  extractArrayItem: (s: unknown) => unknown | null,
+  extractFields: (s: unknown) => Record<string, unknown> | null
+): SchemaInfo {
+  if (info.type === 'array') {
+    const rawItem = extractArrayItem(schema)
+    if (rawItem) {
+      info.item = schemaInfo(rawItem)
+    }
+  }
+  if (info.type === 'object') {
+    const rawFields = extractFields(schema)
+    if (rawFields) {
+      info.fields = {}
+      for (const key of Object.keys(rawFields)) {
+        info.fields[key] = schemaInfo(rawFields[key])
+      }
+    }
+  }
+  return info
+}
 
 /**
  * Extract field metadata from a schema produced by any supported
@@ -37,12 +81,36 @@ const empty: SchemaInfo = { type: null, optional: false, nullable: false }
  */
 function schemaInfo(schema?: unknown): SchemaInfo {
   if (!schema) return empty
-  if (isZodSchema(schema)) return fromZod(schema)
-  if (isYupSchema(schema)) return fromYup(schema)
-  if (isValibotSchema(schema)) return fromValibot(schema)
+  if (isZodSchema(schema))
+    return enrichWithRecursion(
+      fromZod(schema),
+      schema,
+      extractZodArrayItem,
+      extractZodFields
+    )
+  if (isYupSchema(schema))
+    return enrichWithRecursion(
+      fromYup(schema),
+      schema,
+      extractYupArrayItem,
+      extractYupFields
+    )
+  if (isValibotSchema(schema))
+    return enrichWithRecursion(
+      fromValibot(schema),
+      schema,
+      extractValibotArrayItem,
+      extractValibotFields
+    )
   if (isArkTypeSchema(schema)) return fromArkType(schema)
   if (isEffectSchema(schema)) return fromEffect(schema)
-  if (isJoiSchema(schema)) return fromJoi(schema)
+  if (isJoiSchema(schema))
+    return enrichWithRecursion(
+      fromJoi(schema),
+      schema,
+      extractJoiArrayItem,
+      extractJoiFields
+    )
   return empty
 }
 

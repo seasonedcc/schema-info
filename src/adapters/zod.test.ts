@@ -136,16 +136,13 @@ describe('schemaInfo with Zod', () => {
     expect(info.nullable).toBe(false)
   })
 
-  it('returns null for unsupported type', () => {
+  it('extracts info from object type', () => {
     const schema = z.object({ field: z.string() })
     const info = schemaInfo(schema)
-    expect(info).toEqual({
-      type: null,
-      optional: false,
-      nullable: false,
-      getDefaultValue: undefined,
-      enumValues: undefined,
-    })
+    expect(info.type).toBe('object')
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(false)
+    expect(info.fields?.field.type).toBe('string')
   })
 
   it('handles nullable followed by optional', () => {
@@ -493,5 +490,143 @@ describe('schemaInfo with Zod', () => {
     expect(info.type).toBe('file')
     expect(info.optional).toBe(false)
     expect(info.nullable).toBe(false)
+  })
+
+  it('extracts array of strings', () => {
+    const info = schemaInfo(z.array(z.string()))
+    expect(info.type).toBe('array')
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(false)
+    expect(info.item?.type).toBe('string')
+  })
+
+  it('extracts array of numbers', () => {
+    const info = schemaInfo(z.array(z.number()))
+    expect(info.type).toBe('array')
+    expect(info.item?.type).toBe('number')
+  })
+
+  it('extracts array of booleans', () => {
+    const info = schemaInfo(z.array(z.boolean()))
+    expect(info.type).toBe('array')
+    expect(info.item?.type).toBe('boolean')
+  })
+
+  it('extracts array of dates', () => {
+    const info = schemaInfo(z.array(z.date()))
+    expect(info.type).toBe('array')
+    expect(info.item?.type).toBe('date')
+  })
+
+  it('extracts array of enums', () => {
+    const info = schemaInfo(z.array(z.enum(['a', 'b'])))
+    expect(info.type).toBe('array')
+    expect(info.item?.type).toBe('enum')
+    expect(info.item?.enumValues).toEqual(['a', 'b'])
+  })
+
+  it('extracts array of files', () => {
+    const info = schemaInfo(z.array(z.instanceof(File)))
+    expect(info.type).toBe('array')
+    expect(info.item?.type).toBe('file')
+  })
+
+  it('extracts array of objects', () => {
+    const info = schemaInfo(
+      z.array(z.object({ street: z.string(), city: z.string() }))
+    )
+    expect(info.type).toBe('array')
+    expect(info.item?.type).toBe('object')
+    expect(info.item?.fields?.street.type).toBe('string')
+    expect(info.item?.fields?.city.type).toBe('string')
+  })
+
+  it('extracts nested arrays', () => {
+    const info = schemaInfo(z.array(z.array(z.number())))
+    expect(info.type).toBe('array')
+    expect(info.item?.type).toBe('array')
+    expect(info.item?.item?.type).toBe('number')
+  })
+
+  it('handles optional array', () => {
+    const info = schemaInfo(z.array(z.string()).optional())
+    expect(info.type).toBe('array')
+    expect(info.optional).toBe(true)
+    expect(info.item?.type).toBe('string')
+  })
+
+  it('handles nullable array', () => {
+    const info = schemaInfo(z.array(z.string()).nullable())
+    expect(info.type).toBe('array')
+    expect(info.nullable).toBe(true)
+    expect(info.item?.type).toBe('string')
+  })
+
+  it('handles array with default value', () => {
+    const info = schemaInfo(z.array(z.string()).default(['a']))
+    expect(info.type).toBe('array')
+    expect(info.getDefaultValue?.()).toEqual(['a'])
+    expect(info.item?.type).toBe('string')
+  })
+
+  it('handles array inside pipe', () => {
+    const schema = z
+      .array(z.string())
+      .pipe(z.array(z.string()).transform((v) => v))
+    const info = schemaInfo(schema)
+    expect(info.type).toBe('array')
+    expect(info.item?.type).toBe('string')
+  })
+
+  it('extracts object with nested object', () => {
+    const info = schemaInfo(
+      z.object({
+        billing: z.object({ street: z.string(), city: z.string() }),
+      })
+    )
+    expect(info.type).toBe('object')
+    expect(info.fields?.billing.type).toBe('object')
+    expect(info.fields?.billing.fields?.street.type).toBe('string')
+    expect(info.fields?.billing.fields?.city.type).toBe('string')
+  })
+
+  it('extracts object with array field', () => {
+    const info = schemaInfo(z.object({ tags: z.array(z.string()) }))
+    expect(info.type).toBe('object')
+    expect(info.fields?.tags.type).toBe('array')
+    expect(info.fields?.tags.item?.type).toBe('string')
+  })
+
+  it('handles optional object', () => {
+    const info = schemaInfo(z.object({ name: z.string() }).optional())
+    expect(info.type).toBe('object')
+    expect(info.optional).toBe(true)
+    expect(info.fields?.name.type).toBe('string')
+  })
+
+  it('handles nullable object', () => {
+    const info = schemaInfo(z.object({ name: z.string() }).nullable())
+    expect(info.type).toBe('object')
+    expect(info.nullable).toBe(true)
+    expect(info.fields?.name.type).toBe('string')
+  })
+
+  it('handles deep nesting: object → array → object', () => {
+    const info = schemaInfo(
+      z.object({
+        addresses: z.array(
+          z.object({
+            street: z.string(),
+            tags: z.array(z.string()),
+          })
+        ),
+      })
+    )
+    expect(info.type).toBe('object')
+    expect(info.fields?.addresses.type).toBe('array')
+    expect(info.fields?.addresses.item?.type).toBe('object')
+    expect(info.fields?.addresses.item?.fields?.street.type).toBe('string')
+    expect(info.fields?.addresses.item?.fields?.tags.type).toBe('array')
+    expect(info.fields?.addresses.item?.fields?.tags.item?.type).toBe('string')
   })
 })

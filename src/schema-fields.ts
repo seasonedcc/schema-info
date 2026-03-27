@@ -8,15 +8,12 @@ import {
   extractFromAST,
   isEffectSchema,
 } from './adapters/effect'
-import { extractJoiFields, fromJoi, isJoiSchema } from './adapters/joi'
-import {
-  extractValibotFields,
-  fromValibot,
-  isValibotSchema,
-} from './adapters/valibot'
-import { extractYupFields, fromYup, isYupSchema } from './adapters/yup'
-import { extractZodFields, fromZod, isZodSchema } from './adapters/zod'
+import { extractJoiFields, isJoiSchema } from './adapters/joi'
+import { extractValibotFields, isValibotSchema } from './adapters/valibot'
+import { extractYupFields, isYupSchema } from './adapters/yup'
+import { extractZodFields, isZodSchema } from './adapters/zod'
 import { SchemaFieldsError } from './schema-fields-error'
+import { schemaInfo } from './schema-info'
 import type { SchemaInfo } from './types'
 
 function mapRecord(
@@ -72,19 +69,19 @@ function schemaFields(schema: unknown): Record<string, SchemaInfo> {
   if (isZodSchema(schema)) {
     const fields = extractZodFields(schema)
     if (!fields) throw new SchemaFieldsError(schema, 'not-object', 'Zod')
-    return mapRecord(fields, fromZod)
+    return mapRecord(fields, schemaInfo)
   }
 
   if (isYupSchema(schema)) {
     const fields = extractYupFields(schema)
     if (!fields) throw new SchemaFieldsError(schema, 'not-object', 'Yup')
-    return mapRecord(fields, fromYup)
+    return mapRecord(fields, schemaInfo)
   }
 
   if (isValibotSchema(schema)) {
     const fields = extractValibotFields(schema)
     if (!fields) throw new SchemaFieldsError(schema, 'not-object', 'Valibot')
-    return mapRecord(fields, fromValibot)
+    return mapRecord(fields, schemaInfo)
   }
 
   if (isArkTypeSchema(schema)) {
@@ -114,7 +111,7 @@ function schemaFields(schema: unknown): Record<string, SchemaInfo> {
   if (isJoiSchema(schema)) {
     const fields = extractJoiFields(schema)
     if (!fields) throw new SchemaFieldsError(schema, 'not-object', 'Joi')
-    return mapRecord(fields, fromJoi)
+    return mapRecord(fields, schemaInfo)
   }
 
   throw new SchemaFieldsError(schema, 'unrecognized')

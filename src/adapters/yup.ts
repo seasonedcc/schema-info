@@ -62,6 +62,8 @@ const typeMap: Record<string, FieldType> = {
   number: 'number',
   boolean: 'boolean',
   date: 'date',
+  array: 'array',
+  object: 'object',
 }
 
 /**
@@ -161,4 +163,11 @@ function extractYupFields(schema: unknown): Record<string, unknown> | null {
   return fields
 }
 
-export { isYupSchema, fromYup, extractYupFields }
+function extractYupArrayItem(schema: unknown): unknown | null {
+  const yupSchema = asYupSchema(schema)
+  if (!yupSchema || yupSchema.type !== 'array') return null
+  // biome-ignore lint/suspicious/noExplicitAny: Yup internal structure
+  return (schema as any).innerType ?? null
+}
+
+export { isYupSchema, fromYup, extractYupFields, extractYupArrayItem }

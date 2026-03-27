@@ -13,6 +13,8 @@ type EffectAST = {
   enums?: [string, string | number][]
   annotations?: Record<string | symbol, unknown>
   propertySignatures?: { name: string; type: EffectAST; isOptional: boolean }[]
+  rest?: { type: EffectAST }[]
+  elements?: unknown[]
 }
 
 type EffectSchema = {
@@ -145,6 +147,25 @@ function extractFromAST(
     if (ast.type) {
       return extractFromAST(ast.type, innerOptional || optional, nullable)
     }
+  }
+
+  if (_tag === 'TupleType') {
+    const info: SchemaInfo = { type: 'array', optional, nullable }
+    if (ast.rest && ast.rest.length > 0) {
+      info.item = extractFromAST(ast.rest[0].type)
+    }
+    return info
+  }
+
+  if (_tag === 'TypeLiteral') {
+    const info: SchemaInfo = { type: 'object', optional, nullable }
+    if (ast.propertySignatures && ast.propertySignatures.length > 0) {
+      info.fields = {}
+      for (const sig of ast.propertySignatures) {
+        info.fields[String(sig.name)] = extractFromAST(sig.type, sig.isOptional)
+      }
+    }
+    return info
   }
 
   return { type: null, optional, nullable }

@@ -115,12 +115,11 @@ describe('schemaInfo with ArkType', () => {
     expect(info.optional).toBe(false)
   })
 
-  it('returns null for unsupported types', () => {
-    expect(schemaInfo(type({ name: 'string' }))).toEqual({
-      type: null,
-      optional: false,
-      nullable: false,
-    })
+  it('extracts info from object type', () => {
+    const info = schemaInfo(type({ name: 'string' }))
+    expect(info.type).toBe('object')
+    expect(info.optional).toBe(false)
+    expect(info.fields?.name.type).toBe('string')
   })
 
   it('handles number with optional and nullable', () => {
@@ -210,5 +209,93 @@ describe('schemaInfo with ArkType', () => {
     expect(info.type).toBe('file')
     expect(info.optional).toBe(false)
     expect(info.nullable).toBe(false)
+  })
+
+  it('extracts array of strings', () => {
+    const info = schemaInfo(type('string[]'))
+    expect(info.type).toBe('array')
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(false)
+    expect(info.item?.type).toBe('string')
+  })
+
+  it('extracts array of numbers', () => {
+    const info = schemaInfo(type('number[]'))
+    expect(info.type).toBe('array')
+    expect(info.item?.type).toBe('number')
+  })
+
+  it('extracts array of dates', () => {
+    const info = schemaInfo(type('Date[]'))
+    expect(info.type).toBe('array')
+    expect(info.item?.type).toBe('date')
+  })
+
+  it('extracts array of objects', () => {
+    const info = schemaInfo(type({ name: 'string' }).array())
+    expect(info.type).toBe('array')
+    expect(info.item?.type).toBe('object')
+    expect(info.item?.fields?.name.type).toBe('string')
+  })
+
+  it('extracts nested arrays', () => {
+    const info = schemaInfo(type('number[][]'))
+    expect(info.type).toBe('array')
+    expect(info.item?.type).toBe('array')
+    expect(info.item?.item?.type).toBe('number')
+  })
+
+  it('handles optional array', () => {
+    const info = schemaInfo(type('string[] | undefined'))
+    expect(info.type).toBe('array')
+    expect(info.optional).toBe(true)
+    expect(info.item?.type).toBe('string')
+  })
+
+  it('handles nullable array', () => {
+    const info = schemaInfo(type('string[] | null'))
+    expect(info.type).toBe('array')
+    expect(info.nullable).toBe(true)
+    expect(info.item?.type).toBe('string')
+  })
+
+  it('extracts object with nested object', () => {
+    const info = schemaInfo(
+      type({
+        billing: { street: 'string', city: 'string' },
+      })
+    )
+    expect(info.type).toBe('object')
+    expect(info.fields?.billing.type).toBe('object')
+    expect(info.fields?.billing.fields?.street.type).toBe('string')
+    expect(info.fields?.billing.fields?.city.type).toBe('string')
+  })
+
+  it('extracts object with array field', () => {
+    const info = schemaInfo(type({ tags: 'string[]' }))
+    expect(info.type).toBe('object')
+    expect(info.fields?.tags.type).toBe('array')
+    expect(info.fields?.tags.item?.type).toBe('string')
+  })
+
+  it('handles optional object field', () => {
+    const info = schemaInfo(type({ 'name?': 'string' }))
+    expect(info.type).toBe('object')
+    expect(info.fields?.name.type).toBe('string')
+    expect(info.fields?.name.optional).toBe(true)
+  })
+
+  it('handles deep nesting: object → array → object', () => {
+    const info = schemaInfo(
+      type({
+        addresses: type({ street: 'string', tags: 'string[]' }).array(),
+      })
+    )
+    expect(info.type).toBe('object')
+    expect(info.fields?.addresses.type).toBe('array')
+    expect(info.fields?.addresses.item?.type).toBe('object')
+    expect(info.fields?.addresses.item?.fields?.street.type).toBe('string')
+    expect(info.fields?.addresses.item?.fields?.tags.type).toBe('array')
+    expect(info.fields?.addresses.item?.fields?.tags.item?.type).toBe('string')
   })
 })

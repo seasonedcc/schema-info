@@ -154,11 +154,57 @@ function extractFromNode(node: ArkTypeNode): SchemaInfo {
 
   if (kind === 'intersection') {
     const format = resolveArkFormat(node.meta)
+    if (inner.proto) {
+      const protoNode = inner.proto as ArkTypeNode
+      if (protoNode.inner.proto === Array) {
+        const info: SchemaInfo = {
+          type: 'array',
+          ...(format && { format }),
+          optional: false,
+          nullable: false,
+        }
+        const structure = inner.structure as ArkTypeNode | undefined
+        const seqNode = structure?.inner?.sequence as ArkTypeNode | undefined
+        const variadicNode = seqNode?.inner?.variadic as ArkTypeNode | undefined
+        if (variadicNode) {
+          info.item = extractFromNode(variadicNode)
+        }
+        return info
+      }
+      return extractFromNode(protoNode)
+    }
     if (inner.domain) {
-      const info = extractFromNode(inner.domain as ArkTypeNode)
+      const domainNode = inner.domain as ArkTypeNode
+      if ((domainNode.inner.domain as string) === 'object' && inner.structure) {
+        const info: SchemaInfo = {
+          type: 'object',
+          ...(format && { format }),
+          optional: false,
+          nullable: false,
+        }
+        const structure = inner.structure as ArkTypeNode
+        const required = (structure.inner.required ?? []) as ArkTypeNode[]
+        const optionalProps = (structure.inner.optional ?? []) as ArkTypeNode[]
+        if (required.length > 0 || optionalProps.length > 0) {
+          info.fields = {}
+          for (const prop of required) {
+            info.fields[prop.inner.key as string] = extractFromNode(
+              prop.inner.value as ArkTypeNode
+            )
+          }
+          for (const prop of optionalProps) {
+            const fieldInfo = extractFromNode(prop.inner.value as ArkTypeNode)
+            info.fields[prop.inner.key as string] = {
+              ...fieldInfo,
+              optional: true,
+            }
+          }
+        }
+        return info
+      }
+      const info = extractFromNode(domainNode)
       return { ...info, ...(format && { format }) }
     }
-    if (inner.proto) return extractFromNode(inner.proto as ArkTypeNode)
     return { type: null, optional: false, nullable: false }
   }
 

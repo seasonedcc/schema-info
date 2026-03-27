@@ -98,6 +98,8 @@ const typeMap: Record<string, FieldType> = {
   boolean: 'boolean',
   date: 'date',
   enum: 'enum',
+  array: 'array',
+  object: 'object',
 }
 
 /**
@@ -364,4 +366,44 @@ function extractZodFields(schema: unknown): Record<string, unknown> | null {
   return getZodShape(schema)
 }
 
-export { isZodSchema, fromZod, extractZodFields }
+function getZodArrayElement(schema: unknown): unknown | null {
+  const def = getZodDef(schema)
+  if (!def) return null
+
+  if (def.type === 'array') {
+    return def.element ?? null
+  }
+
+  if (def.type === 'pipe') {
+    return getZodArrayElement(def.in) ?? getZodArrayElement(def.out)
+  }
+
+  if (
+    def.type === 'readonly' ||
+    def.type === 'optional' ||
+    def.type === 'nullable' ||
+    def.type === 'default'
+  ) {
+    return getZodArrayElement(def.innerType)
+  }
+
+  if (def.type === 'union' && def.options) {
+    const branches = flattenZodUnionOptions(def.options)
+    for (const branch of branches) {
+      const branchDef = getZodDef(branch)
+      if (branchDef?.type === 'null' || branchDef?.type === 'undefined')
+        continue
+      const element = getZodArrayElement(branch)
+      if (element) return element
+    }
+  }
+
+  return null
+}
+
+function extractZodArrayItem(schema: unknown): unknown | null {
+  if (!isZodSchema(schema)) return null
+  return getZodArrayElement(schema)
+}
+
+export { isZodSchema, fromZod, extractZodFields, extractZodArrayItem }

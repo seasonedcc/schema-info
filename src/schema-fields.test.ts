@@ -381,4 +381,101 @@ describe('schemaFields with Joi', () => {
       expect(e.library).toBe('Joi')
     }
   })
+
+  it('recursively populates nested object fields (Zod)', () => {
+    const fields = schemaFields(
+      z.object({
+        billing: z.object({ street: z.string(), city: z.string() }),
+        tags: z.array(z.string()),
+      })
+    )
+    expect(fields.billing.type).toBe('object')
+    expect(fields.billing.fields?.street.type).toBe('string')
+    expect(fields.billing.fields?.city.type).toBe('string')
+    expect(fields.tags.type).toBe('array')
+    expect(fields.tags.item?.type).toBe('string')
+  })
+
+  it('recursively populates nested object fields (Yup)', () => {
+    const fields = schemaFields(
+      yup.object({
+        billing: yup.object({ street: yup.string(), city: yup.string() }),
+        tags: yup.array().of(yup.string()),
+      })
+    )
+    expect(fields.billing.type).toBe('object')
+    expect(fields.billing.fields?.street.type).toBe('string')
+    expect(fields.tags.type).toBe('array')
+    expect(fields.tags.item?.type).toBe('string')
+  })
+
+  it('recursively populates nested object fields (Valibot)', () => {
+    const fields = schemaFields(
+      v.object({
+        billing: v.object({ street: v.string(), city: v.string() }),
+        tags: v.array(v.string()),
+      })
+    )
+    expect(fields.billing.type).toBe('object')
+    expect(fields.billing.fields?.street.type).toBe('string')
+    expect(fields.tags.type).toBe('array')
+    expect(fields.tags.item?.type).toBe('string')
+  })
+
+  it('recursively populates nested object fields (ArkType)', () => {
+    const fields = schemaFields(
+      type({
+        billing: { street: 'string', city: 'string' },
+        tags: 'string[]',
+      })
+    )
+    expect(fields.billing.type).toBe('object')
+    expect(fields.billing.fields?.street.type).toBe('string')
+    expect(fields.tags.type).toBe('array')
+    expect(fields.tags.item?.type).toBe('string')
+  })
+
+  it('recursively populates nested object fields (Effect)', () => {
+    const fields = schemaFields(
+      S.Struct({
+        billing: S.Struct({ street: S.String, city: S.String }),
+        tags: S.Array(S.String),
+      })
+    )
+    expect(fields.billing.type).toBe('object')
+    expect(fields.billing.fields?.street.type).toBe('string')
+    expect(fields.tags.type).toBe('array')
+    expect(fields.tags.item?.type).toBe('string')
+  })
+
+  it('recursively populates nested object fields (Joi)', () => {
+    const fields = schemaFields(
+      Joi.object({
+        billing: Joi.object({ street: Joi.string(), city: Joi.string() }),
+        tags: Joi.array().items(Joi.string()),
+      })
+    )
+    expect(fields.billing.type).toBe('object')
+    expect(fields.billing.fields?.street.type).toBe('string')
+    expect(fields.tags.type).toBe('array')
+    expect(fields.tags.item?.type).toBe('string')
+  })
+
+  it('handles deep nesting through schemaFields (Zod)', () => {
+    const fields = schemaFields(
+      z.object({
+        addresses: z.array(
+          z.object({
+            street: z.string(),
+            tags: z.array(z.string()),
+          })
+        ),
+      })
+    )
+    expect(fields.addresses.type).toBe('array')
+    expect(fields.addresses.item?.type).toBe('object')
+    expect(fields.addresses.item?.fields?.street.type).toBe('string')
+    expect(fields.addresses.item?.fields?.tags.type).toBe('array')
+    expect(fields.addresses.item?.fields?.tags.item?.type).toBe('string')
+  })
 })

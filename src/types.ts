@@ -1,4 +1,12 @@
-type FieldType = 'string' | 'number' | 'boolean' | 'date' | 'file' | 'enum'
+type FieldType =
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'date'
+  | 'file'
+  | 'enum'
+  | 'array'
+  | 'object'
 
 type FieldFormat =
   | 'date'
@@ -46,6 +54,8 @@ type SchemaInfo = {
   nullable: boolean
   getDefaultValue?: () => unknown
   enumValues?: string[]
+  item?: SchemaInfo
+  fields?: Record<string, SchemaInfo>
 }
 
 export { fieldFormatValues }
