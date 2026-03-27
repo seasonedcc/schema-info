@@ -1,4 +1,4 @@
-import type { FieldFormat, FieldType, SchemaInfo } from '../types'
+import type { FieldFormat, ScalarFieldType, SchemaInfo } from '../types'
 
 const JoiSymbol = Symbol.for('@hapi/joi/schema')
 
@@ -50,7 +50,7 @@ function isJoiSchema(schema: unknown): boolean {
   return asJoiSchema(schema) !== null
 }
 
-const typeMap: Record<string, FieldType> = {
+const typeMap: Record<string, ScalarFieldType> = {
   string: 'string',
   number: 'number',
   boolean: 'boolean',
@@ -76,7 +76,10 @@ const typeMap: Record<string, FieldType> = {
  * // { type: 'string', optional: false, nullable: false }
  * ```
  */
-function fromJoi(schema: unknown): SchemaInfo {
+function fromJoi(
+  schema: unknown,
+  recurse: (s: unknown) => SchemaInfo
+): SchemaInfo {
   const joiSchema = asJoiSchema(schema)
 
   if (!joiSchema) {
@@ -103,7 +106,36 @@ function fromJoi(schema: unknown): SchemaInfo {
           getDefaultValue,
         }
       }
+      return { type: null, optional, nullable, getDefaultValue }
     }
+  }
+
+  if (joiSchema.type === 'array') {
+    // biome-ignore lint/suspicious/noExplicitAny: Joi internal structure
+    const items = (schema as any)?.$_terms?.items as unknown[] | undefined
+    const firstItem = Array.isArray(items) && items.length > 0 ? items[0] : null
+    if (!firstItem) return { type: null, optional, nullable, getDefaultValue }
+    return {
+      type: 'array',
+      item: recurse(firstItem),
+      optional,
+      nullable,
+      getDefaultValue,
+    }
+  }
+
+  if (joiSchema.type === 'object') {
+    // biome-ignore lint/suspicious/noExplicitAny: Joi internal structure
+    const keys = (schema as any)?.$_terms?.keys as
+      | { key: string; schema: unknown }[]
+      | undefined
+    const fields: Record<string, SchemaInfo> = {}
+    if (keys && Array.isArray(keys)) {
+      for (const entry of keys) {
+        fields[entry.key] = recurse(entry.schema)
+      }
+    }
+    return { type: 'object', fields, optional, nullable, getDefaultValue }
   }
 
   if (joiSchema._flags.only === true && valids && valids.size > 0) {

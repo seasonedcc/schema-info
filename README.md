@@ -2,16 +2,16 @@
 
 Universal schema introspection for TypeScript validation libraries.
 
-Extract field metadata (type, optionality, nullability, defaults, enum values) from schemas created with Zod, Yup, Valibot, ArkType, Effect Schema, or Joi.
+Extract field metadata (type, optionality, nullability, defaults, enum values) from schemas created with Zod, Yup, Valibot, ArkType, Effect Schema, or Joi — including nested objects and arrays.
 
 ## Features
 
 - Zero dependencies
 - Supports 6 schema libraries out of the box
 - Auto-detects which library produced a schema
+- Recursive introspection of arrays and nested objects
+- Discriminated union types for type-safe access
 - ESM and CommonJS builds
-- Full TypeScript support with exported types
-- Returns a consistent `SchemaInfo` object regardless of the source library
 
 ## Installation
 
@@ -36,12 +36,16 @@ const fields = schemaFields(z.object({
   age: z.number().optional(),
   role: z.enum(['admin', 'user']),
   avatar: z.instanceof(File),
+  tags: z.array(z.string()),
+  billing: z.object({ street: z.string(), city: z.string() }),
 }))
 // {
 //   name: { type: 'string', optional: false, nullable: false },
 //   age: { type: 'number', optional: true, nullable: false },
-//   role: { type: 'enum', optional: false, nullable: false, enumValues: ['admin', 'user'] },
-//   avatar: { type: 'file', optional: false, nullable: false },
+//   role: { type: 'enum', enumValues: ['admin', 'user'], ... },
+//   avatar: { type: 'file', ... },
+//   tags: { type: 'array', item: { type: 'string', ... }, ... },
+//   billing: { type: 'object', fields: { street: { type: 'string', ... }, city: { type: 'string', ... } }, ... },
 // }
 ```
 
@@ -68,17 +72,7 @@ schemaFields(Joi.object({ name: Joi.string().required(), age: Joi.number() }))
 Extract field metadata from an object schema. Takes a schema that defines an object shape and returns a record mapping each field name to its `SchemaInfo`. Automatically unwraps transforms, pipes, refinements, and other wrappers to find the underlying object.
 
 ```ts
-schemaFields(schema: unknown): Record<string, SchemaInfo> | null
-```
-
-Returns `null` if the schema is not a recognized object type.
-
-Works with wrapped schemas (transforms, pipes, refinements):
-
-```ts
-const schema = z.object({ name: z.string() }).transform((v) => v)
-schemaFields(schema)
-// { name: { type: 'string', optional: false, nullable: false } }
+schemaFields(schema: unknown): Record<string, SchemaInfo>
 ```
 
 Throws a `SchemaFieldsError` when the schema is unrecognized or not an object type:
@@ -96,15 +90,38 @@ try {
 }
 ```
 
+Works with wrapped schemas (transforms, pipes, refinements):
+
+```ts
+const schema = z.object({ name: z.string() }).transform((v) => v)
+schemaFields(schema)
+// { name: { type: 'string', optional: false, nullable: false } }
+```
+
+Nested objects and arrays are recursively introspected:
+
+```ts
+const fields = schemaFields(z.object({
+  addresses: z.array(z.object({
+    street: z.string(),
+    city: z.string(),
+  })),
+}))
+
+fields.addresses.type           // 'array'
+fields.addresses.item.type      // 'object'
+fields.addresses.item.fields    // { street: SchemaInfo, city: SchemaInfo }
+```
+
 ### `schemaInfo(schema?)`
 
-Extract metadata from an **individual field** schema. Useful when you already have a reference to a single field and need its metadata directly.
+Extract metadata from an **individual** schema — scalars, arrays, or objects.
 
 ```ts
 schemaInfo(schema?: unknown): SchemaInfo
 ```
 
-Returns `{ type: null, optional: false, nullable: false }` for `undefined`, unsupported schemas, or unrecognized values. Compound types like objects, arrays, and tuples return `type: null`.
+Returns `{ type: null, optional: false, nullable: false }` for `undefined`, unsupported schemas, or unrecognized values.
 
 ```ts
 import { schemaInfo } from 'schema-info'
@@ -123,6 +140,12 @@ schemaInfo(z.enum(['a', 'b', 'c']))
 
 schemaInfo(z.instanceof(File))
 // { type: 'file', optional: false, nullable: false }
+
+schemaInfo(z.array(z.string()))
+// { type: 'array', item: { type: 'string', ... }, ... }
+
+schemaInfo(z.object({ name: z.string() }))
+// { type: 'object', fields: { name: { type: 'string', ... } }, ... }
 ```
 
 ## Supported Libraries
@@ -151,36 +174,64 @@ File and Blob instance schemas are detected as `{ type: 'file' }`, including thr
 
 `Blob` is also detected as `'file'` in all libraries. Non-file instance checks (e.g., `z.instanceof(RegExp)`) return `{ type: null }`.
 
-## What Gets Extracted
+## Types
+
+`SchemaInfo` is a discriminated union on `type`. Narrow on `type` to access variant-specific properties:
+
+```ts
+import type { SchemaInfo, ArraySchemaInfo, ObjectSchemaInfo } from 'schema-info'
+
+const info = schemaInfo(someSchema)
+
+if (info.type === 'array') {
+  info.item   // SchemaInfo — always present
+}
+
+if (info.type === 'object') {
+  info.fields // Record<string, SchemaInfo> — always present
+}
+```
+
+### Variants
+
+**`ScalarSchemaInfo`** — type is `'string' | 'number' | 'boolean' | 'date' | 'file' | 'enum' | null`
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `type` | `FieldType \| null` | `'string'`, `'number'`, `'boolean'`, `'date'`, `'file'`, `'enum'`, or `null` for unsupported types |
+| `type` | `ScalarFieldType \| null` | The field type, or `null` for unsupported types |
 | `optional` | `boolean` | Whether the field accepts `undefined` |
 | `nullable` | `boolean` | Whether the field accepts `null` |
-| `getDefaultValue` | `(() => unknown) \| undefined` | A function that returns the default value, if one is set |
-| `enumValues` | `string[] \| undefined` | The allowed values for enum fields |
+| `getDefaultValue` | `(() => unknown) \| undefined` | Returns the default value, if set |
+| `enumValues` | `string[] \| undefined` | Allowed values for enum fields |
+| `format` | `FieldFormat \| undefined` | String format (email, url, uuid, etc.) |
 
-## Types
+**`ArraySchemaInfo`** — type is `'array'`
 
-All types are exported for use in your own code:
+All scalar properties above, plus:
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `item` | `SchemaInfo` | Describes the element type |
+
+**`ObjectSchemaInfo`** — type is `'object'`
+
+All scalar properties above, plus:
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `fields` | `Record<string, SchemaInfo>` | Maps field names to their metadata |
+
+### Exported types
 
 ```ts
-import type { SchemaInfo, FieldType } from 'schema-info'
-```
-
-**`FieldType`** — `'string' | 'number' | 'boolean' | 'date' | 'file' | 'enum'`
-
-**`SchemaInfo`** — The universal output type:
-
-```ts
-type SchemaInfo = {
-  type: FieldType | null
-  optional: boolean
-  nullable: boolean
-  getDefaultValue?: () => unknown
-  enumValues?: string[]
-}
+import type {
+  SchemaInfo,
+  ArraySchemaInfo,
+  ObjectSchemaInfo,
+  FieldType,
+  ScalarFieldType,
+  FieldFormat,
+} from 'schema-info'
 ```
 
 ## License

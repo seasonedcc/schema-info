@@ -37,12 +37,12 @@ const empty: SchemaInfo = { type: null, optional: false, nullable: false }
  */
 function schemaInfo(schema?: unknown): SchemaInfo {
   if (!schema) return empty
-  if (isZodSchema(schema)) return fromZod(schema)
-  if (isYupSchema(schema)) return fromYup(schema)
-  if (isValibotSchema(schema)) return fromValibot(schema)
+  if (isZodSchema(schema)) return fromZod(schema, schemaInfo)
+  if (isYupSchema(schema)) return fromYup(schema, schemaInfo)
+  if (isValibotSchema(schema)) return fromValibot(schema, schemaInfo)
   if (isArkTypeSchema(schema)) return fromArkType(schema)
   if (isEffectSchema(schema)) return fromEffect(schema)
-  if (isJoiSchema(schema)) return fromJoi(schema)
+  if (isJoiSchema(schema)) return fromJoi(schema, schemaInfo)
   return empty
 }
 

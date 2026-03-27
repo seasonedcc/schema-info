@@ -1,4 +1,5 @@
-import type { FieldFormat, FieldType, SchemaInfo } from '../types'
+import type { FieldFormat, SchemaInfo } from '../types'
+import type { ScalarFieldType } from '../types'
 import { fieldFormatValues } from '../types'
 
 type ZodInternalDef = {
@@ -92,7 +93,7 @@ function flattenZodUnionOptions(options: unknown[]): unknown[] {
   return result
 }
 
-const typeMap: Record<string, FieldType> = {
+const typeMap: Record<string, ScalarFieldType> = {
   string: 'string',
   number: 'number',
   boolean: 'boolean',
@@ -124,6 +125,7 @@ const typeMap: Record<string, FieldType> = {
  */
 function fromZod(
   schema: unknown,
+  recurse: (s: unknown) => SchemaInfo,
   optional = false,
   nullable = false,
   getDefaultValue?: SchemaInfo['getDefaultValue'],
@@ -159,6 +161,7 @@ function fromZod(
   if (type === 'pipe') {
     return fromZod(
       def.in,
+      recurse,
       optional,
       nullable,
       getDefaultValue,
@@ -170,6 +173,7 @@ function fromZod(
   if (type === 'optional') {
     return fromZod(
       def.innerType,
+      recurse,
       true,
       nullable,
       getDefaultValue,
@@ -181,6 +185,7 @@ function fromZod(
   if (type === 'nullable') {
     return fromZod(
       def.innerType,
+      recurse,
       optional,
       true,
       getDefaultValue,
@@ -192,6 +197,7 @@ function fromZod(
   if (type === 'default') {
     return fromZod(
       def.innerType,
+      recurse,
       optional,
       nullable,
       () => def.defaultValue,
@@ -254,6 +260,7 @@ function fromZod(
     if (remaining.length === 1) {
       return fromZod(
         remaining[0],
+        recurse,
         isOptional,
         isNullable,
         getDefaultValue,
@@ -297,6 +304,40 @@ function fromZod(
         getDefaultValue,
         enumValues,
       }
+    }
+  }
+
+  if (type === 'array') {
+    const resolvedFormat = format ?? getZodFormat(schema)
+    return {
+      type: 'array',
+      item: recurse(def.element),
+      ...(resolvedFormat && { format: resolvedFormat }),
+      optional,
+      nullable,
+      getDefaultValue,
+      enumValues,
+    }
+  }
+
+  if (type === 'object') {
+    // biome-ignore lint/suspicious/noExplicitAny: Zod internal structure is not typed
+    const shape = (schema as any)?.shape as Record<string, unknown> | undefined
+    const fields: Record<string, SchemaInfo> = {}
+    if (shape) {
+      for (const key of Object.keys(shape)) {
+        fields[key] = recurse(shape[key])
+      }
+    }
+    const resolvedFormat = format ?? getZodFormat(schema)
+    return {
+      type: 'object',
+      fields,
+      ...(resolvedFormat && { format: resolvedFormat }),
+      optional,
+      nullable,
+      getDefaultValue,
+      enumValues,
     }
   }
 

@@ -1,6 +1,7 @@
 import * as v from 'valibot'
 import { describe, expect, it } from 'vitest'
 import { schemaInfo } from '../schema-info'
+import type { ArraySchemaInfo, ObjectSchemaInfo } from '../types'
 
 describe('schemaInfo with Valibot', () => {
   it('extracts info from primitive schemas', () => {
@@ -140,21 +141,18 @@ describe('schemaInfo with Valibot', () => {
     expect(info.optional).toBe(true)
   })
 
-  it('returns null for unsupported types', () => {
-    expect(schemaInfo(v.object({ name: v.string() }))).toEqual({
-      type: null,
-      optional: false,
-      nullable: false,
-      getDefaultValue: undefined,
-      enumValues: undefined,
-    })
-    expect(schemaInfo(v.array(v.string()))).toEqual({
-      type: null,
-      optional: false,
-      nullable: false,
-      getDefaultValue: undefined,
-      enumValues: undefined,
-    })
+  it('extracts info from object type', () => {
+    const info = schemaInfo(v.object({ name: v.string() })) as ObjectSchemaInfo
+    expect(info.type).toBe('object')
+    expect(info.optional).toBe(false)
+    expect(info.fields.name.type).toBe('string')
+  })
+
+  it('extracts info from array type', () => {
+    const info = schemaInfo(v.array(v.string())) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.optional).toBe(false)
+    expect(info.item.type).toBe('string')
   })
 
   it('preserves picklist value order', () => {
@@ -378,5 +376,137 @@ describe('schemaInfo with Valibot', () => {
     expect(info.type).toBe('file')
     expect(info.optional).toBe(false)
     expect(info.nullable).toBe(false)
+  })
+
+  it('extracts array of strings', () => {
+    const info = schemaInfo(v.array(v.string())) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.optional).toBe(false)
+    expect(info.item.type).toBe('string')
+  })
+
+  it('extracts array of numbers', () => {
+    const info = schemaInfo(v.array(v.number())) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.item.type).toBe('number')
+  })
+
+  it('extracts array of enums', () => {
+    const info = schemaInfo(v.array(v.picklist(['a', 'b']))) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.item.type).toBe('enum')
+    expect(info.item.enumValues).toEqual(['a', 'b'])
+  })
+
+  it('extracts array of objects', () => {
+    const info = schemaInfo(
+      v.array(v.object({ street: v.string(), city: v.string() }))
+    ) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.item.type).toBe('object')
+    expect((info.item as ObjectSchemaInfo).fields.street.type).toBe('string')
+    expect((info.item as ObjectSchemaInfo).fields.city.type).toBe('string')
+  })
+
+  it('extracts nested arrays', () => {
+    const info = schemaInfo(v.array(v.array(v.number()))) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.item.type).toBe('array')
+    expect((info.item as ArraySchemaInfo).item.type).toBe('number')
+  })
+
+  it('handles optional array', () => {
+    const info = schemaInfo(v.optional(v.array(v.string()))) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.optional).toBe(true)
+    expect(info.item.type).toBe('string')
+  })
+
+  it('handles nullable array', () => {
+    const info = schemaInfo(v.nullable(v.array(v.string()))) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.nullable).toBe(true)
+    expect(info.item.type).toBe('string')
+  })
+
+  it('handles array with default value', () => {
+    const info = schemaInfo(
+      v.optional(v.array(v.string()), ['a'])
+    ) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.optional).toBe(true)
+    expect(info.getDefaultValue?.()).toEqual(['a'])
+    expect(info.item.type).toBe('string')
+  })
+
+  it('handles array with pipe validation', () => {
+    const info = schemaInfo(
+      v.pipe(v.array(v.string()), v.minLength(1))
+    ) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.item.type).toBe('string')
+  })
+
+  it('extracts object with nested object', () => {
+    const info = schemaInfo(
+      v.object({
+        billing: v.object({ street: v.string(), city: v.string() }),
+      })
+    ) as ObjectSchemaInfo
+    expect(info.type).toBe('object')
+    expect(info.fields.billing.type).toBe('object')
+    expect((info.fields.billing as ObjectSchemaInfo).fields.street.type).toBe(
+      'string'
+    )
+  })
+
+  it('extracts object with array field', () => {
+    const info = schemaInfo(
+      v.object({ tags: v.array(v.string()) })
+    ) as ObjectSchemaInfo
+    expect(info.type).toBe('object')
+    expect(info.fields.tags.type).toBe('array')
+    expect((info.fields.tags as ArraySchemaInfo).item.type).toBe('string')
+  })
+
+  it('handles optional object', () => {
+    const info = schemaInfo(
+      v.optional(v.object({ name: v.string() }))
+    ) as ObjectSchemaInfo
+    expect(info.type).toBe('object')
+    expect(info.optional).toBe(true)
+    expect(info.fields.name.type).toBe('string')
+  })
+
+  it('handles nullable object', () => {
+    const info = schemaInfo(
+      v.nullable(v.object({ name: v.string() }))
+    ) as ObjectSchemaInfo
+    expect(info.type).toBe('object')
+    expect(info.nullable).toBe(true)
+    expect(info.fields.name.type).toBe('string')
+  })
+
+  it('handles deep nesting: object → array → object', () => {
+    const info = schemaInfo(
+      v.object({
+        addresses: v.array(
+          v.object({
+            street: v.string(),
+            tags: v.array(v.string()),
+          })
+        ),
+      })
+    ) as ObjectSchemaInfo
+    const addresses = info.fields.addresses as ArraySchemaInfo
+    const addressItem = addresses.item as ObjectSchemaInfo
+    expect(info.type).toBe('object')
+    expect(addresses.type).toBe('array')
+    expect(addressItem.type).toBe('object')
+    expect(addressItem.fields.street.type).toBe('string')
+    expect(addressItem.fields.tags.type).toBe('array')
+    expect((addressItem.fields.tags as ArraySchemaInfo).item.type).toBe(
+      'string'
+    )
   })
 })

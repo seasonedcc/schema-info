@@ -1,6 +1,7 @@
 import { Schema as S } from 'effect'
 import { describe, expect, it } from 'vitest'
 import { schemaInfo } from '../schema-info'
+import type { ArraySchemaInfo, ObjectSchemaInfo } from '../types'
 
 describe('schemaInfo with Effect Schema', () => {
   it('extracts info from string type', () => {
@@ -110,12 +111,11 @@ describe('schemaInfo with Effect Schema', () => {
     expect(info.optional).toBe(true)
   })
 
-  it('returns null for unsupported types', () => {
-    expect(schemaInfo(S.Struct({ name: S.String }))).toEqual({
-      type: null,
-      optional: false,
-      nullable: false,
-    })
+  it('extracts info from object type', () => {
+    const info = schemaInfo(S.Struct({ name: S.String })) as ObjectSchemaInfo
+    expect(info.type).toBe('object')
+    expect(info.optional).toBe(false)
+    expect(info.fields.name.type).toBe('string')
   })
 
   it('extracts uuid format', () => {
@@ -183,5 +183,119 @@ describe('schemaInfo with Effect Schema', () => {
     expect(info.type).toBe('file')
     expect(info.optional).toBe(false)
     expect(info.nullable).toBe(false)
+  })
+
+  it('extracts array of strings', () => {
+    const info = schemaInfo(S.Array(S.String)) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.optional).toBe(false)
+    expect(info.nullable).toBe(false)
+    expect(info.item.type).toBe('string')
+  })
+
+  it('extracts array of numbers', () => {
+    const info = schemaInfo(S.Array(S.Number)) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.item.type).toBe('number')
+  })
+
+  it('extracts array of enums', () => {
+    const info = schemaInfo(S.Array(S.Literal('a', 'b'))) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.item.type).toBe('enum')
+    expect(info.item.enumValues).toEqual(['a', 'b'])
+  })
+
+  it('extracts array of objects', () => {
+    const info = schemaInfo(
+      S.Array(S.Struct({ street: S.String, city: S.String }))
+    ) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.item.type).toBe('object')
+    const item = info.item as ObjectSchemaInfo
+    expect(item.fields.street.type).toBe('string')
+    expect(item.fields.city.type).toBe('string')
+  })
+
+  it('extracts nested arrays', () => {
+    const info = schemaInfo(S.Array(S.Array(S.Number))) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.item.type).toBe('array')
+    expect((info.item as ArraySchemaInfo).item.type).toBe('number')
+  })
+
+  it('handles optional array', () => {
+    const info = schemaInfo(S.optional(S.Array(S.String))) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.optional).toBe(true)
+    expect(info.item.type).toBe('string')
+  })
+
+  it('handles nullable array', () => {
+    const info = schemaInfo(S.NullOr(S.Array(S.String))) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.nullable).toBe(true)
+    expect(info.item.type).toBe('string')
+  })
+
+  it('handles array with pipe filter', () => {
+    const info = schemaInfo(
+      S.Array(S.String).pipe(S.filter((arr) => arr.length > 0))
+    ) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.item.type).toBe('string')
+  })
+
+  it('extracts object with nested object', () => {
+    const info = schemaInfo(
+      S.Struct({
+        billing: S.Struct({ street: S.String, city: S.String }),
+      })
+    ) as ObjectSchemaInfo
+    expect(info.type).toBe('object')
+    expect(info.fields.billing.type).toBe('object')
+    const billing = info.fields.billing as ObjectSchemaInfo
+    expect(billing.fields.street.type).toBe('string')
+    expect(billing.fields.city.type).toBe('string')
+  })
+
+  it('extracts object with array field', () => {
+    const info = schemaInfo(
+      S.Struct({ tags: S.Array(S.String) })
+    ) as ObjectSchemaInfo
+    expect(info.type).toBe('object')
+    expect(info.fields.tags.type).toBe('array')
+    expect((info.fields.tags as ArraySchemaInfo).item.type).toBe('string')
+  })
+
+  it('handles optional object', () => {
+    const info = schemaInfo(
+      S.optional(S.Struct({ name: S.String }))
+    ) as ObjectSchemaInfo
+    expect(info.type).toBe('object')
+    expect(info.optional).toBe(true)
+    expect(info.fields.name.type).toBe('string')
+  })
+
+  it('handles deep nesting: object → array → object', () => {
+    const info = schemaInfo(
+      S.Struct({
+        addresses: S.Array(
+          S.Struct({
+            street: S.String,
+            tags: S.Array(S.String),
+          })
+        ),
+      })
+    ) as ObjectSchemaInfo
+    expect(info.type).toBe('object')
+    const addresses = info.fields.addresses as ArraySchemaInfo
+    expect(addresses.type).toBe('array')
+    const addressItem = addresses.item as ObjectSchemaInfo
+    expect(addressItem.type).toBe('object')
+    expect(addressItem.fields.street.type).toBe('string')
+    const tags = addressItem.fields.tags as ArraySchemaInfo
+    expect(tags.type).toBe('array')
+    expect(tags.item.type).toBe('string')
   })
 })

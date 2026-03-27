@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as yup from 'yup'
 import { schemaInfo } from '../schema-info'
+import type { ArraySchemaInfo, ObjectSchemaInfo } from '../types'
 
 describe('schemaInfo with Yup', () => {
   it('extracts info from primitive schemas', () => {
@@ -104,17 +105,20 @@ describe('schemaInfo with Yup', () => {
     expect(info.getDefaultValue?.()).toEqual(testDate)
   })
 
+  it('extracts info from object type', () => {
+    const info = schemaInfo(yup.object())
+    expect(info.type).toBe('object')
+    expect(info.optional).toBe(true)
+  })
+
+  it('extracts info from array type', () => {
+    const info = schemaInfo(yup.array().of(yup.string())) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.optional).toBe(true)
+    expect(info.item.type).toBe('string')
+  })
+
   it('returns null for unsupported types', () => {
-    expect(schemaInfo(yup.object())).toEqual({
-      type: null,
-      optional: true,
-      nullable: false,
-    })
-    expect(schemaInfo(yup.array())).toEqual({
-      type: null,
-      optional: true,
-      nullable: false,
-    })
     expect(schemaInfo(yup.mixed())).toEqual({
       type: null,
       optional: true,
@@ -232,5 +236,115 @@ describe('schemaInfo with Yup', () => {
       )
     const info = schemaInfo(schema)
     expect(info.type).toBe('file')
+  })
+
+  it('extracts array of strings', () => {
+    const info = schemaInfo(yup.array().of(yup.string())) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.item.type).toBe('string')
+  })
+
+  it('extracts array of numbers', () => {
+    const info = schemaInfo(yup.array().of(yup.number())) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.item.type).toBe('number')
+  })
+
+  it('extracts array of objects', () => {
+    const info = schemaInfo(
+      yup.array().of(yup.object({ name: yup.string() }))
+    ) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.item.type).toBe('object')
+    expect((info.item as ObjectSchemaInfo).fields.name.type).toBe('string')
+  })
+
+  it('handles array without item type', () => {
+    const info = schemaInfo(yup.array())
+    expect(info.type).toBeNull()
+  })
+
+  it('handles required array', () => {
+    const info = schemaInfo(
+      yup.array().of(yup.string()).required()
+    ) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.optional).toBe(false)
+    expect(info.item.type).toBe('string')
+  })
+
+  it('handles nullable array', () => {
+    const info = schemaInfo(
+      yup.array().of(yup.string()).nullable()
+    ) as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(info.nullable).toBe(true)
+    expect(info.item.type).toBe('string')
+  })
+
+  it('handles array with default value', () => {
+    const info = schemaInfo(yup.array().of(yup.string()).default(['a']))
+    expect(info.type).toBe('array')
+    expect(info.getDefaultValue?.()).toEqual(['a'])
+  })
+
+  it('extracts object with nested object', () => {
+    const info = schemaInfo(
+      yup.object({
+        billing: yup.object({ street: yup.string(), city: yup.string() }),
+      })
+    ) as ObjectSchemaInfo
+    expect(info.type).toBe('object')
+    expect(info.fields.billing.type).toBe('object')
+    expect((info.fields.billing as ObjectSchemaInfo).fields.street.type).toBe(
+      'string'
+    )
+  })
+
+  it('extracts object with array field', () => {
+    const info = schemaInfo(
+      yup.object({ tags: yup.array().of(yup.string()) })
+    ) as ObjectSchemaInfo
+    expect(info.type).toBe('object')
+    expect(info.fields.tags.type).toBe('array')
+    expect((info.fields.tags as ArraySchemaInfo).item.type).toBe('string')
+  })
+
+  it('handles optional object', () => {
+    const info = schemaInfo(yup.object({ name: yup.string() }))
+    expect(info.type).toBe('object')
+    expect(info.optional).toBe(true)
+  })
+
+  it('handles deep nesting: object → array → object', () => {
+    const info = schemaInfo(
+      yup.object({
+        addresses: yup.array().of(
+          yup.object({
+            street: yup.string(),
+            tags: yup.array().of(yup.string()),
+          })
+        ),
+      })
+    ) as ObjectSchemaInfo
+    const addresses = info.fields.addresses as ArraySchemaInfo
+    const addressItem = addresses.item as ObjectSchemaInfo
+    const tags = addressItem.fields.tags as ArraySchemaInfo
+    expect(info.type).toBe('object')
+    expect(addresses.type).toBe('array')
+    expect(addressItem.type).toBe('object')
+    expect(addressItem.fields.street.type).toBe('string')
+    expect(tags.type).toBe('array')
+    expect(tags.item.type).toBe('string')
+  })
+
+  it('extracts nested arrays', () => {
+    const info = schemaInfo(
+      yup.array().of(yup.array().of(yup.number()))
+    ) as ArraySchemaInfo
+    const innerArray = info.item as ArraySchemaInfo
+    expect(info.type).toBe('array')
+    expect(innerArray.type).toBe('array')
+    expect(innerArray.item.type).toBe('number')
   })
 })
