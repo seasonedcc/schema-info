@@ -77,6 +77,7 @@ export type {
   FieldType,
   FieldFormat,
   SchemaInfo,
+  ScalarSchemaInfo,
   ArraySchemaInfo,
   ObjectSchemaInfo,
 }
