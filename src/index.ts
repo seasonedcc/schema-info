@@ -9,5 +9,6 @@ export type {
   FieldType,
   ObjectSchemaInfo,
   ScalarFieldType,
+  ScalarSchemaInfo,
   SchemaInfo,
 } from './types'
