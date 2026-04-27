@@ -1,6 +1,6 @@
 import type { FieldFormat, SchemaInfo } from '../types'
 import type { ScalarFieldType } from '../types'
-import { fieldFormatValues } from '../types'
+import { collapseUnionScalars, fieldFormatValues } from '../types'
 
 type ZodInternalDef = {
   type: string
@@ -130,7 +130,8 @@ function fromZod(
   nullable = false,
   getDefaultValue?: SchemaInfo['getDefaultValue'],
   enumValues?: SchemaInfo['enumValues'],
-  format?: FieldFormat
+  format?: FieldFormat,
+  seen: Set<unknown> = new Set()
 ): SchemaInfo {
   const def = getZodDef(schema)
 
@@ -166,7 +167,8 @@ function fromZod(
       nullable,
       getDefaultValue,
       enumValues,
-      format ?? getZodFormat(schema)
+      format ?? getZodFormat(schema),
+      seen
     )
   }
 
@@ -178,7 +180,8 @@ function fromZod(
       nullable,
       getDefaultValue,
       enumValues,
-      format
+      format,
+      seen
     )
   }
 
@@ -190,7 +193,8 @@ function fromZod(
       true,
       getDefaultValue,
       enumValues,
-      format
+      format,
+      seen
     )
   }
 
@@ -202,8 +206,79 @@ function fromZod(
       nullable,
       () => def.defaultValue,
       enumValues,
-      format
+      format,
+      seen
     )
+  }
+
+  if (type === 'lazy' && typeof def.getter === 'function') {
+    if (seen.has(schema)) {
+      return {
+        type: 'recursive',
+        ...(format && { format }),
+        optional,
+        nullable,
+        getDefaultValue,
+        enumValues,
+      }
+    }
+    seen.add(schema)
+    try {
+      return fromZod(
+        (def.getter as () => unknown)(),
+        recurse,
+        optional,
+        nullable,
+        getDefaultValue,
+        enumValues,
+        format,
+        seen
+      )
+    } finally {
+      seen.delete(schema)
+    }
+  }
+
+  if (type === 'literal' && def.values) {
+    const literalValues = Array.from(def.values as Iterable<unknown>)
+    if (literalValues.length === 1) {
+      const v = literalValues[0]
+      if (typeof v === 'string') {
+        return {
+          type: 'string',
+          ...(format && { format }),
+          optional,
+          nullable,
+          getDefaultValue,
+          enumValues,
+        }
+      }
+      if (typeof v === 'number') {
+        return {
+          type: 'number',
+          optional,
+          nullable,
+          getDefaultValue,
+          enumValues,
+        }
+      }
+      if (typeof v === 'boolean') {
+        return {
+          type: 'boolean',
+          optional,
+          nullable,
+          getDefaultValue,
+          enumValues,
+        }
+      }
+    }
+    return {
+      type: null,
+      optional,
+      nullable,
+      getDefaultValue,
+      enumValues,
+    }
   }
 
   if (type === 'union' && def.options) {
@@ -265,12 +340,37 @@ function fromZod(
         isNullable,
         getDefaultValue,
         enumValues,
-        format
+        format,
+        seen
       )
     }
 
+    if (remaining.length === 0) {
+      return {
+        type: null,
+        optional: isOptional,
+        nullable: isNullable,
+        getDefaultValue,
+        enumValues,
+      }
+    }
+
+    const optionInfos = remaining.map((o) => recurse(o))
+    const collapsed = collapseUnionScalars(optionInfos)
+    if (collapsed) {
+      return {
+        ...collapsed,
+        optional: isOptional,
+        nullable: isNullable,
+        getDefaultValue,
+      }
+    }
+    const discriminator =
+      typeof def.discriminator === 'string' ? def.discriminator : undefined
     return {
-      type: null,
+      type: 'union',
+      options: optionInfos,
+      ...(discriminator && { discriminator }),
       optional: isOptional,
       nullable: isNullable,
       getDefaultValue,
@@ -374,6 +474,10 @@ function getZodShape(schema: unknown): Record<string, unknown> | null {
     def.type === 'default'
   ) {
     return getZodShape(def.innerType)
+  }
+
+  if (def.type === 'lazy' && typeof def.getter === 'function') {
+    return getZodShape((def.getter as () => unknown)())
   }
 
   if (def.type === 'union' && def.options) {

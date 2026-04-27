@@ -1,7 +1,11 @@
 import { Schema as S } from 'effect'
 import { describe, expect, it } from 'vitest'
 import { schemaInfo } from '../schema-info'
-import type { ArraySchemaInfo, ObjectSchemaInfo } from '../types'
+import type {
+  ArraySchemaInfo,
+  ObjectSchemaInfo,
+  UnionSchemaInfo,
+} from '../types'
 
 describe('schemaInfo with Effect Schema', () => {
   it('extracts info from string type', () => {
@@ -67,10 +71,19 @@ describe('schemaInfo with Effect Schema', () => {
     expect(info.enumValues).toEqual(['a', 'b', 'c'])
   })
 
-  it('handles single Literal as enum', () => {
+  it('collapses single string Literal to string', () => {
     const info = schemaInfo(S.Literal('only'))
-    expect(info.type).toBe('enum')
-    expect(info.enumValues).toEqual(['only'])
+    expect(info).toEqual({ type: 'string', optional: false, nullable: false })
+  })
+
+  it('collapses single number Literal to number', () => {
+    const info = schemaInfo(S.Literal(-1))
+    expect(info).toEqual({ type: 'number', optional: false, nullable: false })
+  })
+
+  it('collapses single boolean Literal to boolean', () => {
+    const info = schemaInfo(S.Literal(true))
+    expect(info).toEqual({ type: 'boolean', optional: false, nullable: false })
   })
 
   it('handles Enums', () => {
@@ -297,5 +310,132 @@ describe('schemaInfo with Effect Schema', () => {
     const tags = addressItem.fields.tags as ArraySchemaInfo
     expect(tags.type).toBe('array')
     expect(tags.item.type).toBe('string')
+  })
+
+  describe('union variants', () => {
+    it('returns union for mixed-type union (boolean | object)', () => {
+      const info = schemaInfo(
+        S.Union(S.Boolean, S.Struct({ x: S.Number }))
+      ) as UnionSchemaInfo
+      expect(info.type).toBe('union')
+      expect(info.options[0].type).toBe('boolean')
+      expect(info.options[1].type).toBe('object')
+    })
+
+    it('collapses number-literal union to number', () => {
+      expect(schemaInfo(S.Union(S.Literal(1), S.Literal(2))).type).toBe(
+        'number'
+      )
+    })
+
+    it('collapses literal -1 + Number range to number', () => {
+      expect(schemaInfo(S.Union(S.Literal(-1), S.Number)).type).toBe('number')
+    })
+
+    it('detects _tag discriminator from TaggedStruct', () => {
+      const info = schemaInfo(
+        S.Union(
+          S.TaggedStruct('A', { x: S.String }),
+          S.TaggedStruct('B', { y: S.Number })
+        )
+      ) as UnionSchemaInfo
+      expect(info.type).toBe('union')
+      expect(info.discriminator).toBe('_tag')
+      expect(info.options).toHaveLength(2)
+    })
+
+    it('detects manual literal-key discriminator', () => {
+      const info = schemaInfo(
+        S.Union(
+          S.Struct({ kind: S.Literal('a'), x: S.String }),
+          S.Struct({ kind: S.Literal('b'), y: S.Number })
+        )
+      ) as UnionSchemaInfo
+      expect(info.type).toBe('union')
+      expect(info.discriminator).toBe('kind')
+    })
+
+    it('prefers _tag over other shared literal keys when ambiguous', () => {
+      const info = schemaInfo(
+        S.Union(
+          S.Struct({
+            _tag: S.Literal('A'),
+            kind: S.Literal('x'),
+            a: S.String,
+          }),
+          S.Struct({
+            _tag: S.Literal('B'),
+            kind: S.Literal('y'),
+            b: S.Number,
+          })
+        )
+      ) as UnionSchemaInfo
+      expect(info.discriminator).toBe('_tag')
+    })
+
+    it('omits discriminator when none of the keys qualify', () => {
+      const info = schemaInfo(
+        S.Union(S.Struct({ a: S.String }), S.Struct({ b: S.Number }))
+      ) as UnionSchemaInfo
+      expect(info.type).toBe('union')
+      expect(info.discriminator).toBeUndefined()
+    })
+
+    it('strips Literal(null) and UndefinedKeyword from options', () => {
+      const info = schemaInfo(S.NullishOr(S.String))
+      expect(info.type).toBe('string')
+      expect(info.optional).toBe(true)
+      expect(info.nullable).toBe(true)
+    })
+
+    it('marks union with null branch as nullable', () => {
+      const info = schemaInfo(
+        S.Union(S.String, S.Number, S.Null)
+      ) as UnionSchemaInfo
+      expect(info.type).toBe('union')
+      expect(info.options.map((o) => o.type)).toEqual(['string', 'number'])
+      expect(info.nullable).toBe(true)
+    })
+  })
+
+  describe('recursive schemas (Schema.suspend)', () => {
+    it('marks self-reference inside an array as recursive', () => {
+      type Node = { name: string; children: ReadonlyArray<Node> }
+      const Node: S.Schema<Node> = S.Struct({
+        name: S.String,
+        children: S.Array(S.suspend((): S.Schema<Node> => Node)),
+      })
+      const info = schemaInfo(Node) as ObjectSchemaInfo
+      expect(info.type).toBe('object')
+      const children = info.fields.children as ArraySchemaInfo
+      expect(children.type).toBe('array')
+      expect(children.item.type).toBe('recursive')
+    })
+
+    it('preserves optional through suspend', () => {
+      type Node = { children: ReadonlyArray<Node> }
+      const Node: S.Schema<Node> = S.Struct({
+        children: S.Array(S.suspend((): S.Schema<Node> => Node)),
+      })
+      const info = schemaInfo(
+        S.Struct({ inner: S.optional(S.suspend(() => Node)) })
+      ) as ObjectSchemaInfo
+      const inner = info.fields.inner
+      expect(inner.optional).toBe(true)
+      expect(inner.type).toBe('recursive')
+    })
+
+    it('preserves nullable through suspend', () => {
+      type Node = { children: ReadonlyArray<Node> }
+      const Node: S.Schema<Node> = S.Struct({
+        children: S.Array(S.suspend((): S.Schema<Node> => Node)),
+      })
+      const info = schemaInfo(
+        S.Struct({ inner: S.NullOr(S.suspend(() => Node)) })
+      ) as ObjectSchemaInfo
+      const inner = info.fields.inner
+      expect(inner.nullable).toBe(true)
+      expect(inner.type).toBe('recursive')
+    })
   })
 })

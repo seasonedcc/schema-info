@@ -494,3 +494,82 @@ describe('schemaFields with Joi', () => {
     expect((addressFields.tags as ArraySchemaInfo).item.type).toBe('string')
   })
 })
+
+describe('schemaFields recursive schemas', () => {
+  it('marks self-reference as recursive in Zod', () => {
+    type Node = { name: string; children: Node[] }
+    const node: z.ZodType<Node> = z.lazy(() =>
+      z.object({ name: z.string(), children: z.array(node) })
+    )
+    const fields = schemaFields(node)
+    expect(fields.name.type).toBe('string')
+    const children = fields.children as ArraySchemaInfo
+    expect(children.type).toBe('array')
+    expect(children.item.type).toBe('recursive')
+  })
+
+  it('marks self-reference as recursive in Yup', () => {
+    const node: yup.Lazy<unknown> = yup.lazy(() =>
+      yup.object({
+        name: yup.string().required(),
+        children: yup.array().of(node).required(),
+      })
+    )
+    const fields = schemaFields(node)
+    expect(fields.name.type).toBe('string')
+    const children = fields.children as ArraySchemaInfo
+    expect(children.type).toBe('array')
+    expect(children.item.type).toBe('recursive')
+  })
+
+  it('marks self-reference as recursive in Valibot', () => {
+    type Node = { name: string; children: Node[] }
+    const node: v.GenericSchema<Node> = v.lazy(() =>
+      v.object({ name: v.string(), children: v.array(node) })
+    )
+    const fields = schemaFields(node)
+    expect(fields.name.type).toBe('string')
+    const children = fields.children as ArraySchemaInfo
+    expect(children.type).toBe('array')
+    expect(children.item.type).toBe('recursive')
+  })
+
+  it('marks self-reference as recursive in ArkType', () => {
+    const s = type.scope({
+      category: {
+        name: 'string',
+        'subcategories?': 'category[]',
+      },
+    })
+    const fields = schemaFields(s.export().category)
+    expect(fields.name.type).toBe('string')
+    const sub = fields.subcategories as ArraySchemaInfo
+    expect(sub.type).toBe('array')
+    expect(sub.item.type).toBe('recursive')
+  })
+
+  it('marks self-reference as recursive in Effect Schema', () => {
+    type Node = { name: string; children: ReadonlyArray<Node> }
+    const Node: S.Schema<Node> = S.Struct({
+      name: S.String,
+      children: S.Array(S.suspend((): S.Schema<Node> => Node)),
+    })
+    const fields = schemaFields(Node)
+    expect(fields.name.type).toBe('string')
+    const children = fields.children as ArraySchemaInfo
+    expect(children.type).toBe('array')
+    expect(children.item.type).toBe('recursive')
+  })
+
+  it('marks self-reference as recursive in Joi', () => {
+    const node = Joi.object({
+      name: Joi.string().required(),
+      children: Joi.array().items(Joi.link('#node')).required(),
+    }).id('node')
+    const fields = schemaFields(node)
+    expect(fields.name.type).toBe('string')
+    const children = fields.children as ArraySchemaInfo
+    expect(children.type).toBe('array')
+    expect(children.item.type).toBe('recursive')
+  })
+})

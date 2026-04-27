@@ -1,4 +1,5 @@
 import type { FieldFormat, ScalarFieldType, SchemaInfo } from '../types'
+import { collapseUnionScalars } from '../types'
 
 const TypeId = Symbol.for('effect/Schema')
 const IdentifierAnnotationId = Symbol.for('effect/annotation/Identifier')
@@ -15,6 +16,7 @@ type EffectAST = {
   propertySignatures?: { name: string; type: EffectAST; isOptional: boolean }[]
   rest?: { type: EffectAST }[]
   elements?: unknown[]
+  f?: () => EffectAST
 }
 
 type EffectSchema = {
@@ -86,7 +88,8 @@ const tagMap: Record<string, ScalarFieldType> = {
 function extractFromAST(
   ast: EffectAST,
   optional = false,
-  nullable = false
+  nullable = false,
+  seen: Set<unknown> = new Set()
 ): SchemaInfo {
   const { _tag } = ast
 
@@ -94,13 +97,12 @@ function extractFromAST(
     return { type: tagMap[_tag], optional, nullable }
   }
 
-  if (_tag === 'Literal' && typeof ast.literal === 'string') {
-    return {
-      type: 'enum',
-      optional,
-      nullable,
-      enumValues: [ast.literal],
-    }
+  if (_tag === 'Literal') {
+    const lit = ast.literal
+    if (typeof lit === 'string') return { type: 'string', optional, nullable }
+    if (typeof lit === 'number') return { type: 'number', optional, nullable }
+    if (typeof lit === 'boolean') return { type: 'boolean', optional, nullable }
+    return { type: null, optional, nullable }
   }
 
   if (_tag === 'Enums' && ast.enums) {
@@ -129,23 +131,27 @@ function extractFromAST(
   const format = identifier ? effectFormatMap[identifier] : undefined
 
   if (_tag === 'Refinement' && ast.from) {
-    const info = extractFromAST(ast.from, optional, nullable)
+    const info = extractFromAST(ast.from, optional, nullable, seen)
     return format ? { ...info, format } : info
   }
 
   if (_tag === 'Transformation' && ast.from) {
-    const info = extractFromAST(ast.from, optional, nullable)
+    const info = extractFromAST(ast.from, optional, nullable, seen)
     return format ? { ...info, format } : info
   }
 
+  if (_tag === 'Suspend') {
+    return { type: 'recursive', optional, nullable }
+  }
+
   if (_tag === 'Union' && ast.types) {
-    return extractFromUnion(ast.types, optional, nullable)
+    return extractFromUnion(ast.types, optional, nullable, seen)
   }
 
   if (_tag === 'PropertySignatureDeclaration') {
     const innerOptional = ast.isOptional === true
     if (ast.type) {
-      return extractFromAST(ast.type, innerOptional || optional, nullable)
+      return extractFromAST(ast.type, innerOptional || optional, nullable, seen)
     }
   }
 
@@ -154,7 +160,7 @@ function extractFromAST(
       type: 'array',
       item:
         ast.rest && ast.rest.length > 0
-          ? extractFromAST(ast.rest[0].type)
+          ? extractFromAST(ast.rest[0].type, false, false, seen)
           : { type: null, optional: false, nullable: false },
       optional,
       nullable,
@@ -165,7 +171,12 @@ function extractFromAST(
     const fields: Record<string, SchemaInfo> = {}
     if (ast.propertySignatures) {
       for (const sig of ast.propertySignatures) {
-        fields[String(sig.name)] = extractFromAST(sig.type, sig.isOptional)
+        fields[String(sig.name)] = extractFromAST(
+          sig.type,
+          sig.isOptional,
+          false,
+          seen
+        )
       }
     }
     return { type: 'object', fields, optional, nullable }
@@ -177,7 +188,8 @@ function extractFromAST(
 function extractFromUnion(
   types: EffectAST[],
   optional: boolean,
-  nullable: boolean
+  nullable: boolean,
+  seen: Set<unknown>
 ): SchemaInfo {
   let isOptional = optional
   let isNullable = nullable
@@ -208,10 +220,74 @@ function extractFromUnion(
   }
 
   if (remaining.length === 1) {
-    return extractFromAST(remaining[0], isOptional, isNullable)
+    return extractFromAST(remaining[0], isOptional, isNullable, seen)
   }
 
-  return { type: null, optional: isOptional, nullable: isNullable }
+  if (remaining.length === 0) {
+    return { type: null, optional: isOptional, nullable: isNullable }
+  }
+
+  const optionInfos = remaining.map((m) =>
+    extractFromAST(m, false, false, seen)
+  )
+  const collapsed = collapseUnionScalars(optionInfos)
+  if (collapsed) {
+    return { ...collapsed, optional: isOptional, nullable: isNullable }
+  }
+  const discriminator = detectEffectDiscriminator(remaining)
+  return {
+    type: 'union',
+    options: optionInfos,
+    ...(discriminator && { discriminator }),
+    optional: isOptional,
+    nullable: isNullable,
+  }
+}
+
+function detectEffectDiscriminator(members: EffectAST[]): string | undefined {
+  if (members.length < 2) return undefined
+  if (!members.every((m) => m._tag === 'TypeLiteral' && m.propertySignatures)) {
+    return undefined
+  }
+  const candidates = new Map<string, Set<string>>()
+  const firstSignatures = members[0].propertySignatures ?? []
+  for (const sig of firstSignatures) {
+    const litValue = literalStringValue(sig.type)
+    if (litValue === undefined) continue
+    candidates.set(String(sig.name), new Set([litValue]))
+  }
+  for (let i = 1; i < members.length; i++) {
+    const sigs = members[i].propertySignatures ?? []
+    const seenKeys = new Set<string>()
+    for (const sig of sigs) {
+      const name = String(sig.name)
+      if (!candidates.has(name)) continue
+      const litValue = literalStringValue(sig.type)
+      if (litValue === undefined) {
+        candidates.delete(name)
+        continue
+      }
+      const values = candidates.get(name)
+      if (!values || values.has(litValue)) {
+        candidates.delete(name)
+        continue
+      }
+      values.add(litValue)
+      seenKeys.add(name)
+    }
+    for (const key of Array.from(candidates.keys())) {
+      if (!seenKeys.has(key)) candidates.delete(key)
+    }
+  }
+  if (candidates.size === 0) return undefined
+  if (candidates.has('_tag')) return '_tag'
+  return candidates.keys().next().value
+}
+
+function literalStringValue(ast: EffectAST): string | undefined {
+  if (ast._tag !== 'Literal') return undefined
+  const lit = ast.literal
+  return typeof lit === 'string' ? lit : undefined
 }
 
 /**
@@ -233,14 +309,17 @@ function extractFromUnion(
  * // { type: 'string', optional: false, nullable: true }
  * ```
  */
-function fromEffect(schema: unknown): SchemaInfo {
+function fromEffect(
+  schema: unknown,
+  seen: Set<unknown> = new Set()
+): SchemaInfo {
   const effectSchema = asEffectSchema(schema)
 
   if (!effectSchema) {
     return { type: null, optional: false, nullable: false }
   }
 
-  return extractFromAST(effectSchema.ast)
+  return extractFromAST(effectSchema.ast, false, false, seen)
 }
 
 function findTypeLiteral(ast: EffectAST): EffectAST | null {

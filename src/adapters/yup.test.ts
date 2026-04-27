@@ -347,4 +347,39 @@ describe('schemaInfo with Yup', () => {
     expect(innerArray.type).toBe('array')
     expect(innerArray.item.type).toBe('number')
   })
+
+  describe('numeric oneOf', () => {
+    it('does not classify numeric oneOf as enum', () => {
+      const info = schemaInfo(yup.number().oneOf([-1]))
+      expect(info.type).toBe('number')
+    })
+
+    it('classifies string oneOf as enum', () => {
+      const info = schemaInfo(yup.string().oneOf(['a', 'b']))
+      expect(info.type).toBe('enum')
+      expect(info.enumValues).toEqual(['a', 'b'])
+    })
+  })
+
+  describe('recursive schemas (yup.lazy)', () => {
+    it('marks self-reference inside an array as recursive', () => {
+      const node: yup.Lazy<unknown> = yup.lazy(() =>
+        yup.object({
+          name: yup.string().required(),
+          children: yup.array().of(node).required(),
+        })
+      )
+      const info = schemaInfo(node) as ObjectSchemaInfo
+      expect(info.type).toBe('object')
+      const children = info.fields.children as ArraySchemaInfo
+      expect(children.type).toBe('array')
+      expect(children.item.type).toBe('recursive')
+    })
+
+    it('resolves yup.lazy to its underlying schema for non-recursive use', () => {
+      const lazyString = yup.lazy(() => yup.string().required())
+      const info = schemaInfo(lazyString)
+      expect(info.type).toBe('string')
+    })
+  })
 })

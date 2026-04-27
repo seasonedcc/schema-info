@@ -1,7 +1,11 @@
 import * as v from 'valibot'
 import { describe, expect, it } from 'vitest'
 import { schemaInfo } from '../schema-info'
-import type { ArraySchemaInfo, ObjectSchemaInfo } from '../types'
+import type {
+  ArraySchemaInfo,
+  ObjectSchemaInfo,
+  UnionSchemaInfo,
+} from '../types'
 
 describe('schemaInfo with Valibot', () => {
   it('extracts info from primitive schemas', () => {
@@ -508,5 +512,108 @@ describe('schemaInfo with Valibot', () => {
     expect((addressItem.fields.tags as ArraySchemaInfo).item.type).toBe(
       'string'
     )
+  })
+
+  describe('single literals', () => {
+    it('collapses string literal to string', () => {
+      expect(schemaInfo(v.literal('foo'))).toMatchObject({ type: 'string' })
+    })
+
+    it('collapses number literal to number', () => {
+      expect(schemaInfo(v.literal(-1))).toMatchObject({ type: 'number' })
+    })
+
+    it('collapses boolean literal to boolean', () => {
+      expect(schemaInfo(v.literal(true))).toMatchObject({ type: 'boolean' })
+    })
+  })
+
+  describe('union variants', () => {
+    it('keeps string-literal union as enum', () => {
+      const info = schemaInfo(v.union([v.literal('a'), v.literal('b')]))
+      expect(info.type).toBe('enum')
+      expect(info.enumValues).toEqual(['a', 'b'])
+    })
+
+    it('collapses true/false literal pair to boolean', () => {
+      expect(
+        schemaInfo(v.union([v.literal(true), v.literal(false)])).type
+      ).toBe('boolean')
+    })
+
+    it('collapses number-literal union to number', () => {
+      expect(schemaInfo(v.union([v.literal(1), v.literal(2)])).type).toBe(
+        'number'
+      )
+    })
+
+    it('returns union for mixed-type union (boolean | object)', () => {
+      const info = schemaInfo(
+        v.union([v.boolean(), v.object({ x: v.number() })])
+      ) as UnionSchemaInfo
+      expect(info.type).toBe('union')
+      expect(info.options[0].type).toBe('boolean')
+      expect(info.options[1].type).toBe('object')
+    })
+
+    it('strips null/undefined branches', () => {
+      const info = schemaInfo(v.union([v.string(), v.null_(), v.undefined_()]))
+      expect(info.type).toBe('string')
+      expect(info.optional).toBe(true)
+      expect(info.nullable).toBe(true)
+    })
+
+    it('populates discriminator from v.variant', () => {
+      const info = schemaInfo(
+        v.variant('tag', [
+          v.object({ tag: v.literal('a'), x: v.string() }),
+          v.object({ tag: v.literal('b'), y: v.number() }),
+        ])
+      ) as UnionSchemaInfo
+      expect(info.type).toBe('union')
+      expect(info.discriminator).toBe('tag')
+      expect(info.options).toHaveLength(2)
+    })
+
+    it('preserves discriminator across nullable wrapper', () => {
+      const info = schemaInfo(
+        v.nullable(
+          v.variant('tag', [
+            v.object({ tag: v.literal('a'), x: v.string() }),
+            v.object({ tag: v.literal('b'), y: v.number() }),
+          ])
+        )
+      ) as UnionSchemaInfo
+      expect(info.type).toBe('union')
+      expect(info.discriminator).toBe('tag')
+      expect(info.nullable).toBe(true)
+    })
+
+    it('collapses union of enums to enum with merged values', () => {
+      const info = schemaInfo(
+        v.union([v.picklist(['a', 'b']), v.picklist(['c', 'd'])])
+      )
+      expect(info.type).toBe('enum')
+      expect(info.enumValues).toEqual(['a', 'b', 'c', 'd'])
+    })
+  })
+
+  describe('recursive schemas (v.lazy)', () => {
+    it('marks self-reference inside an array as recursive', () => {
+      type Node = { name: string; children: Node[] }
+      const node: v.GenericSchema<Node> = v.lazy(() =>
+        v.object({ name: v.string(), children: v.array(node) })
+      )
+      const info = schemaInfo(node) as ObjectSchemaInfo
+      expect(info.type).toBe('object')
+      const children = info.fields.children as ArraySchemaInfo
+      expect(children.type).toBe('array')
+      expect(children.item.type).toBe('recursive')
+    })
+
+    it('handles non-recursive v.lazy by unwrapping', () => {
+      const lazy = v.lazy(() => v.string())
+      expect(schemaInfo(lazy).type).toBe('string')
+    })
   })
 })
