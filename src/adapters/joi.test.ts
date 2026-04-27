@@ -1,7 +1,11 @@
 import Joi from 'joi'
 import { describe, expect, it } from 'vitest'
 import { schemaInfo } from '../schema-info'
-import type { ArraySchemaInfo, ObjectSchemaInfo } from '../types'
+import type {
+  ArraySchemaInfo,
+  ObjectSchemaInfo,
+  UnionSchemaInfo,
+} from '../types'
 
 describe('schemaInfo with Joi', () => {
   it('extracts info from string type', () => {
@@ -357,5 +361,89 @@ describe('schemaInfo with Joi', () => {
     expect(addressItemInfo.fields.street.type).toBe('string')
     expect(tagsInfo.type).toBe('array')
     expect(tagsInfo.item.type).toBe('string')
+  })
+
+  describe('alternatives', () => {
+    it('returns union type for try() of mixed scalars', () => {
+      const info = schemaInfo(
+        Joi.alternatives().try(Joi.string(), Joi.number())
+      ) as UnionSchemaInfo
+      expect(info.type).toBe('union')
+      const types = info.options.map((o) => o.type).sort()
+      expect(types).toEqual(['number', 'string'])
+      expect(info.discriminator).toBeUndefined()
+    })
+
+    it('collapses identical scalar try() to that scalar', () => {
+      const info = schemaInfo(
+        Joi.alternatives().try(Joi.string(), Joi.string())
+      )
+      expect(info.type).toBe('string')
+    })
+
+    it('detects discriminator from conditional with switch', () => {
+      const info = schemaInfo(
+        Joi.alternatives().conditional('type', {
+          switch: [
+            // biome-ignore lint/suspicious/noThenProperty: Joi switch API requires `then` key
+            { is: 'a', then: Joi.object({ x: Joi.string() }) },
+            // biome-ignore lint/suspicious/noThenProperty: Joi switch API requires `then` key
+            { is: 'b', then: Joi.object({ y: Joi.number() }) },
+          ],
+        })
+      ) as UnionSchemaInfo
+      expect(info.type).toBe('union')
+      expect(info.discriminator).toBe('type')
+      expect(info.options).toHaveLength(2)
+      expect(info.options[0].type).toBe('object')
+      expect(info.options[1].type).toBe('object')
+    })
+
+    it('detects discriminator post-hoc from try() of objects with shared valid().only() key', () => {
+      const info = schemaInfo(
+        Joi.alternatives().try(
+          Joi.object({
+            type: Joi.string().valid('a').only().required(),
+            x: Joi.string(),
+          }),
+          Joi.object({
+            type: Joi.string().valid('b').only().required(),
+            y: Joi.number(),
+          })
+        )
+      ) as UnionSchemaInfo
+      expect(info.type).toBe('union')
+      expect(info.discriminator).toBe('type')
+    })
+
+    it('returns single recursion when alternatives has one option', () => {
+      const info = schemaInfo(Joi.alternatives().try(Joi.string()))
+      expect(info.type).toBe('string')
+    })
+
+    it('returns null when alternatives has no options', () => {
+      const info = schemaInfo(Joi.alternatives())
+      expect(info.type).toBeNull()
+    })
+  })
+
+  describe('recursive schemas (Joi.link)', () => {
+    it('marks Joi.link as recursive', () => {
+      const info = schemaInfo(Joi.link('#node'))
+      expect(info.type).toBe('recursive')
+    })
+
+    it('marks self-reference inside an array as recursive', () => {
+      const info = schemaInfo(
+        Joi.object({
+          name: Joi.string().required(),
+          children: Joi.array().items(Joi.link('#node')).required(),
+        }).id('node')
+      ) as ObjectSchemaInfo
+      expect(info.type).toBe('object')
+      const children = info.fields.children as ArraySchemaInfo
+      expect(children.type).toBe('array')
+      expect(children.item.type).toBe('recursive')
+    })
   })
 })

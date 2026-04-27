@@ -40,6 +40,19 @@ function asYupSchema(schema: unknown): YupInternalSchema | null {
   return candidate as YupInternalSchema
 }
 
+type YupLazy = {
+  type: 'lazy'
+  resolve: (opts: { value: unknown }) => unknown
+}
+
+function asYupLazy(schema: unknown): YupLazy | null {
+  if (!schema || typeof schema !== 'object') return null
+  const candidate = schema as Partial<YupLazy>
+  if (candidate.type !== 'lazy') return null
+  if (typeof candidate.resolve !== 'function') return null
+  return candidate as YupLazy
+}
+
 /**
  * Detect whether the given value is a Yup schema.
  *
@@ -54,7 +67,7 @@ function asYupSchema(schema: unknown): YupInternalSchema | null {
  * ```
  */
 function isYupSchema(schema: unknown): boolean {
-  return asYupSchema(schema) !== null
+  return asYupSchema(schema) !== null || asYupLazy(schema) !== null
 }
 
 const typeMap: Record<string, ScalarFieldType> = {
@@ -86,8 +99,23 @@ const typeMap: Record<string, ScalarFieldType> = {
  */
 function fromYup(
   schema: unknown,
-  recurse: (s: unknown) => SchemaInfo
+  recurse: (s: unknown) => SchemaInfo,
+  seen: Set<unknown> = new Set()
 ): SchemaInfo {
+  const lazy = asYupLazy(schema)
+  if (lazy) {
+    if (seen.has(schema)) {
+      return { type: 'recursive', optional: false, nullable: false }
+    }
+    seen.add(schema)
+    try {
+      const inner = lazy.resolve({ value: undefined })
+      return fromYup(inner, recurse, seen)
+    } finally {
+      seen.delete(schema)
+    }
+  }
+
   const yupSchema = asYupSchema(schema)
 
   if (!yupSchema) {
@@ -119,8 +147,11 @@ function fromYup(
     }
   }
 
-  const enumValues = Array.from(yupSchema._whitelist) as string[]
-  if (enumValues.length > 0) {
+  const whitelistValues = Array.from(yupSchema._whitelist)
+  const enumValues = whitelistValues.filter(
+    (v): v is string => typeof v === 'string'
+  )
+  if (enumValues.length > 0 && enumValues.length === whitelistValues.length) {
     return {
       type: 'enum',
       optional,
@@ -181,6 +212,10 @@ function fromYup(
  *   or `null` if the schema is not an object type
  */
 function extractYupFields(schema: unknown): Record<string, unknown> | null {
+  const lazy = asYupLazy(schema)
+  if (lazy) {
+    return extractYupFields(lazy.resolve({ value: undefined }))
+  }
   const yupSchema = asYupSchema(schema)
   if (!yupSchema || yupSchema.type !== 'object') return null
   // biome-ignore lint/suspicious/noExplicitAny: Yup internal structure

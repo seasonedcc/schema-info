@@ -8,7 +8,9 @@ export type {
   FieldFormat,
   FieldType,
   ObjectSchemaInfo,
+  RecursiveSchemaInfo,
   ScalarFieldType,
   ScalarSchemaInfo,
   SchemaInfo,
+  UnionSchemaInfo,
 } from './types'

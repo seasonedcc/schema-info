@@ -1,5 +1,5 @@
 import type { FieldFormat, ScalarFieldType, SchemaInfo } from '../types'
-import { fieldFormatValues } from '../types'
+import { collapseUnionScalars, fieldFormatValues } from '../types'
 
 type ArkTypeNode = {
   kind: string
@@ -59,18 +59,13 @@ const domainMap: Record<string, ScalarFieldType> = {
   number: 'number',
 }
 
-function isBooleanUnion(branches: ArkTypeNode[]) {
-  if (branches.length !== 2) return false
-  const units = branches
-    .filter((b) => b.kind === 'unit')
-    .map((b) => b.inner.unit)
-  return units.includes(true) && units.includes(false)
-}
-
-function extractFromBranches(branches: ArkTypeNode[]): SchemaInfo {
+function extractFromBranches(
+  branches: ArkTypeNode[],
+  seen: Set<unknown>
+): SchemaInfo {
   let optional = false
   let nullable = false
-  const remaining: ArkTypeNode[] = []
+  const stripped: ArkTypeNode[] = []
 
   for (const branch of branches) {
     if (branch.kind === 'unit' && branch.inner.unit === undefined) {
@@ -78,13 +73,11 @@ function extractFromBranches(branches: ArkTypeNode[]): SchemaInfo {
     } else if (branch.kind === 'unit' && branch.inner.unit === null) {
       nullable = true
     } else {
-      remaining.push(branch)
+      stripped.push(branch)
     }
   }
 
-  if (isBooleanUnion(remaining)) {
-    return { type: 'boolean', optional, nullable }
-  }
+  const remaining = collapseBooleanUnitPair(stripped)
 
   const allStringUnits =
     remaining.length > 0 &&
@@ -101,14 +94,63 @@ function extractFromBranches(branches: ArkTypeNode[]): SchemaInfo {
   }
 
   if (remaining.length === 1) {
-    const info = extractFromNode(remaining[0])
+    const branch = remaining[0]
+    if (branch === BOOLEAN_PAIR_SENTINEL) {
+      return { type: 'boolean', optional, nullable }
+    }
+    const info = extractFromNode(branch, seen)
     return { ...info, optional, nullable }
   }
 
-  return { type: null, optional, nullable }
+  if (remaining.length === 0) {
+    return { type: null, optional, nullable }
+  }
+
+  const optionInfos = remaining.map((b) =>
+    b === BOOLEAN_PAIR_SENTINEL
+      ? ({ type: 'boolean', optional: false, nullable: false } as SchemaInfo)
+      : extractFromNode(b, seen)
+  )
+  const collapsed = collapseUnionScalars(optionInfos)
+  if (collapsed) {
+    return { ...collapsed, optional, nullable }
+  }
+  return {
+    type: 'union',
+    options: optionInfos,
+    optional,
+    nullable,
+  }
 }
 
-function extractFromNode(node: ArkTypeNode): SchemaInfo {
+const BOOLEAN_PAIR_SENTINEL = {
+  kind: '__boolean_pair__',
+  inner: {},
+} as ArkTypeNode
+
+function collapseBooleanUnitPair(branches: ArkTypeNode[]): ArkTypeNode[] {
+  let hasTrue = false
+  let hasFalse = false
+  const others: ArkTypeNode[] = []
+  for (const b of branches) {
+    if (b.kind === 'unit' && b.inner.unit === true) hasTrue = true
+    else if (b.kind === 'unit' && b.inner.unit === false) hasFalse = true
+    else others.push(b)
+  }
+  if (hasTrue && hasFalse) {
+    return [...others, BOOLEAN_PAIR_SENTINEL]
+  }
+  if (hasTrue)
+    others.push({ kind: 'unit', inner: { unit: true } } as ArkTypeNode)
+  if (hasFalse)
+    others.push({ kind: 'unit', inner: { unit: false } } as ArkTypeNode)
+  return others
+}
+
+function extractFromNode(
+  node: ArkTypeNode,
+  seen: Set<unknown> = new Set()
+): SchemaInfo {
   const { kind, inner } = node
 
   if (kind === 'domain') {
@@ -119,13 +161,18 @@ function extractFromNode(node: ArkTypeNode): SchemaInfo {
     }
   }
 
-  if (kind === 'unit' && typeof inner.unit === 'string') {
-    return {
-      type: 'enum',
-      optional: false,
-      nullable: false,
-      enumValues: [inner.unit as string],
+  if (kind === 'unit') {
+    const unitValue = inner.unit
+    if (typeof unitValue === 'string') {
+      return { type: 'string', optional: false, nullable: false }
     }
+    if (typeof unitValue === 'number') {
+      return { type: 'number', optional: false, nullable: false }
+    }
+    if (typeof unitValue === 'boolean') {
+      return { type: 'boolean', optional: false, nullable: false }
+    }
+    return { type: null, optional: false, nullable: false }
   }
 
   if (kind === 'proto') {
@@ -145,7 +192,22 @@ function extractFromNode(node: ArkTypeNode): SchemaInfo {
 
   if (kind === 'union') {
     const format = resolveArkFormat(node.meta)
-    const info = extractFromBranches((inner.branches as ArkTypeNode[]) ?? [])
+    const branches = (inner.branches as ArkTypeNode[]) ?? []
+    const branchInfo = extractFromBranches(branches, seen)
+    let info: SchemaInfo
+    if (branchInfo.type === 'union') {
+      const discriminantJson = (
+        node as { discriminantJson?: { path?: unknown[] } }
+      ).discriminantJson
+      const path = discriminantJson?.path
+      const discriminator =
+        Array.isArray(path) && path.length === 1 && typeof path[0] === 'string'
+          ? path[0]
+          : undefined
+      info = discriminator ? { ...branchInfo, discriminator } : branchInfo
+    } else {
+      info = branchInfo
+    }
     if (format) {
       return {
         ...info,
@@ -154,6 +216,10 @@ function extractFromNode(node: ArkTypeNode): SchemaInfo {
       } as SchemaInfo
     }
     return info
+  }
+
+  if (kind === 'alias') {
+    return { type: 'recursive', optional: false, nullable: false }
   }
 
   if (kind === 'intersection') {
@@ -167,14 +233,14 @@ function extractFromNode(node: ArkTypeNode): SchemaInfo {
         return {
           type: 'array',
           item: variadicNode
-            ? extractFromNode(variadicNode)
+            ? extractFromNode(variadicNode, seen)
             : { type: null, optional: false, nullable: false },
           ...(format && { format }),
           optional: false,
           nullable: false,
         }
       }
-      return extractFromNode(protoNode)
+      return extractFromNode(protoNode, seen)
     }
     if (inner.domain) {
       const domainNode = inner.domain as ArkTypeNode
@@ -185,11 +251,15 @@ function extractFromNode(node: ArkTypeNode): SchemaInfo {
         const fields: Record<string, SchemaInfo> = {}
         for (const prop of required) {
           fields[prop.inner.key as string] = extractFromNode(
-            prop.inner.value as ArkTypeNode
+            prop.inner.value as ArkTypeNode,
+            seen
           )
         }
         for (const prop of optionalProps) {
-          const fieldInfo = extractFromNode(prop.inner.value as ArkTypeNode)
+          const fieldInfo = extractFromNode(
+            prop.inner.value as ArkTypeNode,
+            seen
+          )
           fields[prop.inner.key as string] = {
             ...fieldInfo,
             optional: true,
@@ -203,7 +273,7 @@ function extractFromNode(node: ArkTypeNode): SchemaInfo {
           nullable: false,
         }
       }
-      const info = extractFromNode(domainNode)
+      const info = extractFromNode(domainNode, seen)
       return { ...info, ...(format && { format }) }
     }
     return { type: null, optional: false, nullable: false }
@@ -231,14 +301,17 @@ function extractFromNode(node: ArkTypeNode): SchemaInfo {
  * // { type: 'string', optional: false, nullable: true }
  * ```
  */
-function fromArkType(schema: unknown): SchemaInfo {
+function fromArkType(
+  schema: unknown,
+  seen: Set<unknown> = new Set()
+): SchemaInfo {
   const node = asArkTypeSchema(schema)
 
   if (!node) {
     return { type: null, optional: false, nullable: false }
   }
 
-  return extractFromNode(node)
+  return extractFromNode(node, seen)
 }
 
 function getArkTypeStructure(node: ArkTypeNode): ArkTypeNode | null {

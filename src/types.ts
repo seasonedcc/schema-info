@@ -6,7 +6,7 @@ type ScalarFieldType =
   | 'file'
   | 'enum'
 
-type FieldType = ScalarFieldType | 'array' | 'object'
+type FieldType = ScalarFieldType | 'array' | 'object' | 'union' | 'recursive'
 
 type FieldFormat =
   | 'date'
@@ -69,9 +69,69 @@ type ObjectSchemaInfo = BaseSchemaInfo & {
   fields: Record<string, SchemaInfo>
 }
 
-type SchemaInfo = ScalarSchemaInfo | ArraySchemaInfo | ObjectSchemaInfo
+type UnionSchemaInfo = BaseSchemaInfo & {
+  type: 'union'
+  options: SchemaInfo[]
+  discriminator?: string
+}
 
-export { fieldFormatValues }
+type RecursiveSchemaInfo = BaseSchemaInfo & {
+  type: 'recursive'
+}
+
+type SchemaInfo =
+  | ScalarSchemaInfo
+  | ArraySchemaInfo
+  | ObjectSchemaInfo
+  | UnionSchemaInfo
+  | RecursiveSchemaInfo
+
+const pureScalarTypes: ReadonlySet<ScalarFieldType> = new Set([
+  'string',
+  'number',
+  'boolean',
+  'date',
+  'file',
+])
+
+function isPureScalarType(
+  type: SchemaInfo['type']
+): type is 'string' | 'number' | 'boolean' | 'date' | 'file' {
+  return type !== null && pureScalarTypes.has(type as ScalarFieldType)
+}
+
+function collapseUnionScalars(options: SchemaInfo[]): SchemaInfo | null {
+  if (options.length === 0) return null
+  const first = options[0]
+  if (first.type === 'enum' && options.every((o) => o.type === 'enum')) {
+    const merged: string[] = []
+    const seenValues = new Set<string>()
+    for (const o of options) {
+      for (const v of o.enumValues ?? []) {
+        if (!seenValues.has(v)) {
+          seenValues.add(v)
+          merged.push(v)
+        }
+      }
+    }
+    return {
+      type: 'enum',
+      optional: false,
+      nullable: false,
+      enumValues: merged,
+    }
+  }
+  const firstType = first.type
+  if (
+    isPureScalarType(firstType) &&
+    options.every((o) => o.type === firstType)
+  ) {
+    return { type: firstType, optional: false, nullable: false }
+  }
+  return null
+}
+
+export { fieldFormatValues, collapseUnionScalars }
 export type {
   ScalarFieldType,
   FieldType,
@@ -80,4 +140,6 @@ export type {
   ScalarSchemaInfo,
   ArraySchemaInfo,
   ObjectSchemaInfo,
+  UnionSchemaInfo,
+  RecursiveSchemaInfo,
 }

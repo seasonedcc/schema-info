@@ -1,7 +1,11 @@
-import { type } from 'arktype'
+import { scope, type } from 'arktype'
 import { describe, expect, it } from 'vitest'
 import { schemaInfo } from '../schema-info'
-import type { ArraySchemaInfo, ObjectSchemaInfo } from '../types'
+import type {
+  ArraySchemaInfo,
+  ObjectSchemaInfo,
+  UnionSchemaInfo,
+} from '../types'
 
 describe('schemaInfo with ArkType', () => {
   it('extracts info from string type', () => {
@@ -98,10 +102,14 @@ describe('schemaInfo with ArkType', () => {
     expect(info.enumValues).toEqual(['x', 'y'])
   })
 
-  it('handles enum with single value', () => {
+  it('collapses single string literal to string', () => {
     const info = schemaInfo(type("'only'"))
-    expect(info.type).toBe('enum')
-    expect(info.enumValues).toEqual(['only'])
+    expect(info).toEqual({ type: 'string', optional: false, nullable: false })
+  })
+
+  it('collapses single number literal to number', () => {
+    const info = schemaInfo(type('42'))
+    expect(info).toEqual({ type: 'number', optional: false, nullable: false })
   })
 
   it('handles constrained string (intersection)', () => {
@@ -303,5 +311,88 @@ describe('schemaInfo with ArkType', () => {
     expect((addressItem.fields.tags as ArraySchemaInfo).item.type).toBe(
       'string'
     )
+  })
+
+  describe('union variants', () => {
+    it('returns mixed-type union for boolean | object', () => {
+      const info = schemaInfo(
+        type('boolean').or(type({ x: 'number' }))
+      ) as UnionSchemaInfo
+      expect(info.type).toBe('union')
+      const types = info.options.map((o) => o.type).sort()
+      expect(types).toEqual(['boolean', 'object'])
+      expect(info.discriminator).toBeUndefined()
+    })
+
+    it('collapses literal unions of same scalar', () => {
+      const info = schemaInfo(type('1 | 2 | 3'))
+      expect(info.type).toBe('number')
+    })
+
+    it('collapses number literal + number range to number', () => {
+      const info = schemaInfo(type('-1').or(type('number > 127')))
+      expect(info.type).toBe('number')
+    })
+
+    it('returns union for mixed string/number literals', () => {
+      const info = schemaInfo(type("'a' | 1")) as UnionSchemaInfo
+      expect(info.type).toBe('union')
+      const types = info.options.map((o) => o.type).sort()
+      expect(types).toEqual(['number', 'string'])
+    })
+
+    it('detects discriminator from path of length 1', () => {
+      const A = type({ tag: '"a"', x: 'string' })
+      const B = type({ tag: '"b"', y: 'number' })
+      const info = schemaInfo(A.or(B)) as UnionSchemaInfo
+      expect(info.type).toBe('union')
+      expect(info.discriminator).toBe('tag')
+      expect(info.options).toHaveLength(2)
+      expect(info.options[0].type).toBe('object')
+      expect(info.options[1].type).toBe('object')
+    })
+
+    it('leaves discriminator undefined for nested discriminator path', () => {
+      const A = type({ outer: { tag: '"a"', x: 'string' } })
+      const B = type({ outer: { tag: '"b"', y: 'number' } })
+      const info = schemaInfo(A.or(B)) as UnionSchemaInfo
+      expect(info.type).toBe('union')
+      expect(info.discriminator).toBeUndefined()
+    })
+
+    it('does not collapse string units "true"|"false" to boolean', () => {
+      const info = schemaInfo(type('"true" | "false"'))
+      expect(info.type).toBe('enum')
+      expect(info.enumValues).toEqual(expect.arrayContaining(['true', 'false']))
+    })
+
+    it('collapses enum-of-enums into a single enum', () => {
+      const info = schemaInfo(type("'a' | 'b'").or(type("'c' | 'd'")))
+      expect(info.type).toBe('enum')
+      expect(info.enumValues?.sort()).toEqual(['a', 'b', 'c', 'd'])
+    })
+  })
+
+  describe('recursive schemas', () => {
+    it('marks self-reference as recursive in scope-defined schema', () => {
+      const s = scope({
+        category: {
+          name: 'string',
+          'subcategories?': 'category[]',
+        },
+      })
+      const info = schemaInfo(s.export().category) as ObjectSchemaInfo
+      expect(info.type).toBe('object')
+      const sub = info.fields.subcategories as ArraySchemaInfo
+      expect(sub.type).toBe('array')
+      expect(sub.optional).toBe(true)
+      expect(sub.item.type).toBe('recursive')
+    })
+
+    it('inlines non-recursive scope alias to underlying type', () => {
+      const s = scope({ a: 'string', b: 'a' })
+      const info = schemaInfo(s.export().b)
+      expect(info.type).toBe('string')
+    })
   })
 })

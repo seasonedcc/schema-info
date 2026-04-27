@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import * as z from 'zod'
 import { schemaInfo } from '../schema-info'
-import type { ArraySchemaInfo, ObjectSchemaInfo } from '../types'
+import type {
+  ArraySchemaInfo,
+  ObjectSchemaInfo,
+  UnionSchemaInfo,
+} from '../types'
 
 describe('schemaInfo with Zod', () => {
   it('extracts info from primitive schemas', () => {
@@ -235,11 +239,17 @@ describe('schemaInfo with Zod', () => {
     expect(info.getDefaultValue?.()).toBe(42)
   })
 
-  it('returns null type for unsupported multi-type unions', () => {
+  it('returns union type for multi-type unions', () => {
     const info = schemaInfo(z.string().or(z.number()))
-    expect(info.type).toBeNull()
-    expect(info.optional).toBe(false)
-    expect(info.nullable).toBe(false)
+    expect(info).toEqual({
+      type: 'union',
+      options: [
+        { type: 'string', optional: false, nullable: false },
+        { type: 'number', optional: false, nullable: false },
+      ],
+      optional: false,
+      nullable: false,
+    })
   })
 
   it('handles deeply nested modifiers', () => {
@@ -633,5 +643,160 @@ describe('schemaInfo with Zod', () => {
     const tags = addrItem.fields.tags as ArraySchemaInfo
     expect(tags.type).toBe('array')
     expect(tags.item.type).toBe('string')
+  })
+
+  describe('single literals', () => {
+    it('collapses string literal to string', () => {
+      expect(schemaInfo(z.literal('foo'))).toEqual({
+        type: 'string',
+        optional: false,
+        nullable: false,
+        getDefaultValue: undefined,
+        enumValues: undefined,
+      })
+    })
+
+    it('collapses number literal to number', () => {
+      expect(schemaInfo(z.literal(-1))).toEqual({
+        type: 'number',
+        optional: false,
+        nullable: false,
+        getDefaultValue: undefined,
+        enumValues: undefined,
+      })
+    })
+
+    it('collapses boolean literal to boolean', () => {
+      expect(schemaInfo(z.literal(true))).toEqual({
+        type: 'boolean',
+        optional: false,
+        nullable: false,
+        getDefaultValue: undefined,
+        enumValues: undefined,
+      })
+    })
+
+    it('preserves nullable wrapper around literal', () => {
+      expect(schemaInfo(z.literal('foo').nullable())).toMatchObject({
+        type: 'string',
+        nullable: true,
+      })
+    })
+  })
+
+  describe('union variants', () => {
+    it('collapses number-literal union to number', () => {
+      expect(schemaInfo(z.union([z.literal(1), z.literal(2)])).type).toBe(
+        'number'
+      )
+    })
+
+    it('keeps string-literal union as enum', () => {
+      const info = schemaInfo(z.union([z.literal('a'), z.literal('b')]))
+      expect(info.type).toBe('enum')
+      expect(info.enumValues).toEqual(['a', 'b'])
+    })
+
+    it('returns union for mixed string + number literals', () => {
+      const info = schemaInfo(
+        z.union([z.literal('a'), z.literal(1)])
+      ) as UnionSchemaInfo
+      expect(info.type).toBe('union')
+      expect(info.options.map((o) => o.type)).toEqual(['string', 'number'])
+    })
+
+    it('returns union for mixed-type union (boolean | object)', () => {
+      const info = schemaInfo(
+        z.union([z.boolean(), z.object({ x: z.number() })])
+      ) as UnionSchemaInfo
+      expect(info.type).toBe('union')
+      expect(info.options[0].type).toBe('boolean')
+      expect(info.options[1].type).toBe('object')
+    })
+
+    it('collapses number literal + number range to number', () => {
+      expect(
+        schemaInfo(z.union([z.literal(-1), z.number().int().min(128)])).type
+      ).toBe('number')
+    })
+
+    it('collapses union of enums to enum with merged values', () => {
+      const info = schemaInfo(z.union([z.enum(['a', 'b']), z.enum(['c', 'd'])]))
+      expect(info.type).toBe('enum')
+      expect(info.enumValues).toEqual(['a', 'b', 'c', 'd'])
+    })
+
+    it('populates discriminator from z.discriminatedUnion', () => {
+      const info = schemaInfo(
+        z.discriminatedUnion('tag', [
+          z.object({ tag: z.literal('a'), x: z.string() }),
+          z.object({ tag: z.literal('b'), y: z.number() }),
+        ])
+      ) as UnionSchemaInfo
+      expect(info.type).toBe('union')
+      expect(info.discriminator).toBe('tag')
+      expect(info.options).toHaveLength(2)
+      expect(info.options[0].type).toBe('object')
+    })
+
+    it('preserves discriminator across nullable wrapper', () => {
+      const info = schemaInfo(
+        z
+          .discriminatedUnion('tag', [
+            z.object({ tag: z.literal('a'), x: z.string() }),
+            z.object({ tag: z.literal('b'), y: z.number() }),
+          ])
+          .nullable()
+      ) as UnionSchemaInfo
+      expect(info.type).toBe('union')
+      expect(info.discriminator).toBe('tag')
+      expect(info.nullable).toBe(true)
+    })
+
+    it('preserves nullable from null branch in mixed union', () => {
+      const info = schemaInfo(
+        z.union([z.string(), z.number(), z.null()])
+      ) as UnionSchemaInfo
+      expect(info.type).toBe('union')
+      expect(info.options.map((o) => o.type)).toEqual(['string', 'number'])
+      expect(info.nullable).toBe(true)
+    })
+
+    it('returns null type for empty post-strip union', () => {
+      const info = schemaInfo(z.union([z.null(), z.undefined()]))
+      expect(info.type).toBeNull()
+      expect(info.optional).toBe(true)
+      expect(info.nullable).toBe(true)
+    })
+  })
+
+  describe('recursive schemas (z.lazy)', () => {
+    it('marks self-reference inside an array as recursive', () => {
+      type Node = { name: string; children: Node[] }
+      const node: z.ZodType<Node> = z.lazy(() =>
+        z.object({ name: z.string(), children: z.array(node) })
+      )
+      const info = schemaInfo(node) as ObjectSchemaInfo
+      expect(info.type).toBe('object')
+      const children = info.fields.children as ArraySchemaInfo
+      expect(children.type).toBe('array')
+      expect(children.item.type).toBe('recursive')
+    })
+
+    it('handles non-recursive z.lazy by unwrapping', () => {
+      const lazy = z.lazy(() => z.string())
+      expect(schemaInfo(lazy).type).toBe('string')
+    })
+
+    it('expands two siblings of the same recursive schema independently', () => {
+      type Node = { name: string; children: Node[] }
+      const node: z.ZodType<Node> = z.lazy(() =>
+        z.object({ name: z.string(), children: z.array(node) })
+      )
+      const sibling = z.object({ a: node, b: node })
+      const info = schemaInfo(sibling) as ObjectSchemaInfo
+      expect((info.fields.a as ObjectSchemaInfo).type).toBe('object')
+      expect((info.fields.b as ObjectSchemaInfo).type).toBe('object')
+    })
   })
 })

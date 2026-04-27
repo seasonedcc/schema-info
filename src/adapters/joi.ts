@@ -1,4 +1,5 @@
 import type { FieldFormat, ScalarFieldType, SchemaInfo } from '../types'
+import { collapseUnionScalars } from '../types'
 
 const JoiSymbol = Symbol.for('@hapi/joi/schema')
 
@@ -57,6 +58,137 @@ const typeMap: Record<string, ScalarFieldType> = {
   date: 'date',
 }
 
+type JoiAltSwitch = { is?: unknown; then?: unknown; otherwise?: unknown }
+type JoiAltMatch = {
+  schema?: unknown
+  ref?: { path?: unknown[] }
+  switch?: JoiAltSwitch[]
+}
+
+function extractFromAlternatives(
+  schema: unknown,
+  recurse: (s: unknown) => SchemaInfo,
+  optional: boolean,
+  nullable: boolean,
+  getDefaultValue: SchemaInfo['getDefaultValue']
+): SchemaInfo {
+  const matches =
+    (schema as { $_terms?: { matches?: JoiAltMatch[] } }).$_terms?.matches ?? []
+
+  let discriminator: string | undefined
+  let rawOptions: unknown[] = []
+
+  const conditional = matches.find(
+    (m) => m.ref && Array.isArray(m.ref.path) && m.ref.path.length > 0
+  )
+  if (conditional?.ref?.path && conditional.ref.path.length > 0) {
+    const path = conditional.ref.path
+    if (path.length === 1 && typeof path[0] === 'string') {
+      discriminator = path[0]
+    }
+    rawOptions = (conditional.switch ?? [])
+      .map((sw) => sw.then)
+      .filter((s): s is unknown => s !== undefined && s !== null)
+  } else {
+    rawOptions = matches
+      .map((m) => m.schema)
+      .filter((s): s is unknown => s !== undefined && s !== null)
+  }
+
+  if (rawOptions.length === 0) {
+    return { type: null, optional, nullable, getDefaultValue }
+  }
+  if (rawOptions.length === 1) {
+    const info = recurse(rawOptions[0])
+    return { ...info, optional, nullable, getDefaultValue }
+  }
+
+  const optionInfos = rawOptions.map((o) => recurse(o))
+  const collapsed = collapseUnionScalars(optionInfos)
+  if (collapsed) {
+    return { ...collapsed, optional, nullable, getDefaultValue }
+  }
+
+  if (!discriminator) {
+    discriminator = detectJoiDiscriminator(rawOptions)
+  }
+
+  return {
+    type: 'union',
+    options: optionInfos,
+    ...(discriminator && { discriminator }),
+    optional,
+    nullable,
+    getDefaultValue,
+  }
+}
+
+function detectJoiDiscriminator(options: unknown[]): string | undefined {
+  const objectSchemas = options
+    .map((o) => asJoiSchema(o))
+    .filter((s): s is JoiSchema => s !== null && s.type === 'object')
+  if (objectSchemas.length !== options.length) return undefined
+  if (objectSchemas.length < 2) return undefined
+
+  const candidates = new Map<string, Set<string>>()
+  const firstKeys = getJoiObjectKeys(objectSchemas[0])
+  for (const [key, fieldSchema] of firstKeys) {
+    const value = singleStringOnlyValue(fieldSchema)
+    if (value === undefined) continue
+    candidates.set(key, new Set([value]))
+  }
+
+  for (let i = 1; i < objectSchemas.length; i++) {
+    const keyMap = getJoiObjectKeys(objectSchemas[i])
+    const visited = new Set<string>()
+    for (const [key, fieldSchema] of keyMap) {
+      if (!candidates.has(key)) continue
+      const value = singleStringOnlyValue(fieldSchema)
+      if (value === undefined) {
+        candidates.delete(key)
+        continue
+      }
+      const values = candidates.get(key)
+      if (!values || values.has(value)) {
+        candidates.delete(key)
+        continue
+      }
+      values.add(value)
+      visited.add(key)
+    }
+    for (const key of Array.from(candidates.keys())) {
+      if (!visited.has(key)) candidates.delete(key)
+    }
+  }
+
+  if (candidates.size === 0) return undefined
+  return candidates.keys().next().value
+}
+
+function getJoiObjectKeys(schema: JoiSchema): Map<string, unknown> {
+  const result = new Map<string, unknown>()
+  // biome-ignore lint/suspicious/noExplicitAny: Joi internal structure
+  const keys = (schema as any).$_terms?.keys as
+    | { key: string; schema: unknown }[]
+    | undefined
+  if (keys && Array.isArray(keys)) {
+    for (const entry of keys) {
+      result.set(entry.key, entry.schema)
+    }
+  }
+  return result
+}
+
+function singleStringOnlyValue(schema: unknown): string | undefined {
+  const joi = asJoiSchema(schema)
+  if (!joi) return undefined
+  if (joi._flags.only !== true) return undefined
+  const values = joi._valids?._values
+  if (!values || values.size !== 1) return undefined
+  const [value] = [...values]
+  return typeof value === 'string' ? value : undefined
+}
+
 /**
  * Extract {@link SchemaInfo} from a Joi schema.
  *
@@ -91,6 +223,20 @@ function fromJoi(
   const nullable = valids?.has(null) === true
   const getDefaultValue =
     'default' in joiSchema._flags ? () => joiSchema._flags.default : undefined
+
+  if (joiSchema.type === 'link') {
+    return { type: 'recursive', optional, nullable, getDefaultValue }
+  }
+
+  if (joiSchema.type === 'alternatives') {
+    return extractFromAlternatives(
+      schema,
+      recurse,
+      optional,
+      nullable,
+      getDefaultValue
+    )
+  }
 
   for (const rule of joiSchema._rules) {
     if (rule.name === 'instance') {

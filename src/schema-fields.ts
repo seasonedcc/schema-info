@@ -13,16 +13,16 @@ import { extractValibotFields, isValibotSchema } from './adapters/valibot'
 import { extractYupFields, isYupSchema } from './adapters/yup'
 import { extractZodFields, isZodSchema } from './adapters/zod'
 import { SchemaFieldsError } from './schema-fields-error'
-import { schemaInfo } from './schema-info'
+import { introspect } from './schema-info'
 import type { SchemaInfo } from './types'
 
 function mapRecord(
   fields: Record<string, unknown>,
-  mapper: (field: unknown) => SchemaInfo
+  seen: Set<unknown>
 ): Record<string, SchemaInfo> {
   const result: Record<string, SchemaInfo> = {}
   for (const key of Object.keys(fields)) {
-    result[key] = mapper(fields[key])
+    result[key] = introspect(fields[key], seen)
   }
   return result
 }
@@ -66,22 +66,25 @@ function mapRecord(
  * ```
  */
 function schemaFields(schema: unknown): Record<string, SchemaInfo> {
+  const seen = new Set<unknown>()
+  if (schema && typeof schema === 'object') seen.add(schema)
+
   if (isZodSchema(schema)) {
     const fields = extractZodFields(schema)
     if (!fields) throw new SchemaFieldsError(schema, 'not-object', 'Zod')
-    return mapRecord(fields, schemaInfo)
+    return mapRecord(fields, seen)
   }
 
   if (isYupSchema(schema)) {
     const fields = extractYupFields(schema)
     if (!fields) throw new SchemaFieldsError(schema, 'not-object', 'Yup')
-    return mapRecord(fields, schemaInfo)
+    return mapRecord(fields, seen)
   }
 
   if (isValibotSchema(schema)) {
     const fields = extractValibotFields(schema)
     if (!fields) throw new SchemaFieldsError(schema, 'not-object', 'Valibot')
-    return mapRecord(fields, schemaInfo)
+    return mapRecord(fields, seen)
   }
 
   if (isArkTypeSchema(schema)) {
@@ -90,7 +93,7 @@ function schemaFields(schema: unknown): Record<string, SchemaInfo> {
       throw new SchemaFieldsError(schema, 'not-object', 'ArkType')
     const result: Record<string, SchemaInfo> = {}
     for (const field of fieldInfos) {
-      const info = extractFromNode(field.value)
+      const info = extractFromNode(field.value, seen)
       result[field.key] = { ...info, optional: field.optional || info.optional }
     }
     return result
@@ -102,7 +105,7 @@ function schemaFields(schema: unknown): Record<string, SchemaInfo> {
       throw new SchemaFieldsError(schema, 'not-object', 'Effect Schema')
     const result: Record<string, SchemaInfo> = {}
     for (const field of fieldInfos) {
-      const info = extractFromAST(field.ast, field.optional)
+      const info = extractFromAST(field.ast, field.optional, false, seen)
       result[field.key] = info
     }
     return result
@@ -111,7 +114,7 @@ function schemaFields(schema: unknown): Record<string, SchemaInfo> {
   if (isJoiSchema(schema)) {
     const fields = extractJoiFields(schema)
     if (!fields) throw new SchemaFieldsError(schema, 'not-object', 'Joi')
-    return mapRecord(fields, schemaInfo)
+    return mapRecord(fields, seen)
   }
 
   throw new SchemaFieldsError(schema, 'unrecognized')

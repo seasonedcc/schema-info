@@ -221,6 +221,37 @@ All scalar properties above, plus:
 | --- | --- | --- |
 | `fields` | `Record<string, SchemaInfo>` | Maps field names to their metadata |
 
+**`UnionSchemaInfo`** — type is `'union'`
+
+Returned for unions whose members are not all the same scalar (e.g. `boolean | object`, mixed-type literal unions, discriminated unions of structs). Pure-scalar unions collapse to their scalar (`string | string` → `'string'`), all-string-literal unions collapse to `'enum'`, and `T | null` / `T | undefined` are stripped to `nullable` / `optional` flags before this variant is emitted.
+
+All scalar properties above, plus:
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `options` | `SchemaInfo[]` | Each remaining union branch after stripping `null`/`undefined` |
+| `discriminator` | `string \| undefined` | Field name used for discriminated unions, when one was declared |
+
+Discriminator detection is library-specific:
+
+- **Zod** — populated from `z.discriminatedUnion('key', [...])`.
+- **Valibot** — populated from `v.variant('key', [...])`.
+- **ArkType** — populated when the union exposes a one-segment `discriminantJson.path`.
+- **Effect Schema** — populated for unions of structs that share a single string-`Literal` property (e.g. `Schema.TaggedStruct` produces `_tag`).
+- **Joi** — populated from `Joi.alternatives().conditional(key, { switch })`, or post-hoc when every option is an object schema with a single shared `valid(...).only()` string key.
+- **Yup** — has no first-class union construct; never populated.
+
+**`RecursiveSchemaInfo`** — type is `'recursive'`
+
+Marks a self-reference at a cycle re-entry point so consumers can render or traverse without infinite recursion. The boundary that triggers this variant is library-specific:
+
+- **Zod** — `z.lazy(...)` re-encountered on a recursive path.
+- **Valibot** — `v.lazy(...)` re-encountered on a recursive path.
+- **Yup** — `yup.lazy(...)` re-encountered on a recursive path. The resolver is called with `value: undefined`.
+- **Effect Schema** — every `Schema.suspend(...)` is reported as recursive (it's idiomatically used only for self-references).
+- **ArkType** — every `alias` node is reported as recursive (non-cyclic scope refs are inlined by ArkType before introspection sees them).
+- **Joi** — every `Joi.link(...)` is reported as recursive.
+
 ### Exported types
 
 ```ts
@@ -228,6 +259,8 @@ import type {
   SchemaInfo,
   ArraySchemaInfo,
   ObjectSchemaInfo,
+  UnionSchemaInfo,
+  RecursiveSchemaInfo,
   FieldType,
   ScalarFieldType,
   FieldFormat,
